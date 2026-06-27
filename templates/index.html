@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Port Energy Digital Twin Ops Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>Port Energy Digital Twin Ops Assistant</h1>
+        <p class="tagline">A two-agent decision-support assistant prioritizing port operational resilience, clean energy utilization, and grid cost management.</p>
+    </header>
+
+    <main class="app-container">
+        <section class="controls-card">
+            <h2>Select Disruption Scenario</h2>
+            <div class="control-group">
+                <label for="scenario-select">Available Scenarios:</label>
+                <select id="scenario-select">
+                    <option value="">-- Select a Scenario --</option>
+                </select>
+            </div>
+            
+            <div id="scenario-details" class="scenario-details hidden">
+                <h3>Scenario Context</h3>
+                <p id="scenario-desc"></p>
+                <div class="metrics-grid">
+                    <div><strong>Critical Load:</strong> <span id="val-critical">0</span> kW</div>
+                    <div><strong>Vessel Demand:</strong> <span id="val-vessel">0</span> kW</div>
+                    <div><strong>Solar Capacity:</strong> <span id="val-solar">0</span> kW</div>
+                    <div><strong>Battery Level:</strong> <span id="val-battery">0</span> kWh / <span id="val-battery-max">0</span> kWh</div>
+                    <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
+                </div>
+            </div>
+
+            <button id="run-btn" class="btn btn-primary" disabled>Run Operator Evaluation</button>
+        </section>
+
+        <section id="result-section" class="results-card hidden">
+            <h2>Evaluation Analysis Result</h2>
+            <div class="status-banner" id="eval-status-banner">
+                <strong>Status:</strong> <span id="eval-status">N/A</span>
+            </div>
+            
+            <p id="eval-summary" class="eval-summary-text"></p>
+
+            <div class="results-layout">
+                <div class="routing-table-container">
+                    <h3>Proposed Energy Routing</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Source Path</th>
+                                <th>Allocated Power (kW)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Solar to Port Load</td><td id="route-solar-port">0.0</td></tr>
+                            <tr><td>Solar to Battery Charge</td><td id="route-solar-battery">0.0</td></tr>
+                            <tr><td>Grid to Port Load</td><td id="route-grid-port">0.0</td></tr>
+                            <tr><td>Battery to Port Load</td><td id="route-battery-port">0.0</td></tr>
+                            <tr><td>Generator to Port Load</td><td id="route-generator-port">0.0</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="review-details">
+                    <h3>Two-Agent Review Insights</h3>
+                    <div class="insight-box">
+                        <h4>Planner Rationale</h4>
+                        <p id="planner-rationale">No plan proposed yet.</p>
+                        <p class="alignment-note"><strong>Priority Alignment:</strong> <span id="planner-alignment">N/A</span></p>
+                    </div>
+                    <div class="insight-box">
+                        <h4>Safety & Constraints Check</h4>
+                        <p><strong>Is Safe:</strong> <span id="safety-safe">N/A</span></p>
+                        <ul id="safety-violations" class="violations-list"></ul>
+                        <ul id="safety-warnings" class="warnings-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>Local-First Decision-Support Prototype | Operations Planner & Safety Reviewer Agent Framework</p>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", async () => {
+            const selectEl = document.getElementById("scenario-select");
+            const runBtn = document.getElementById("run-btn");
+            const detailsDiv = document.getElementById("scenario-details");
+            const resultSection = document.getElementById("result-section");
+            
+            // State
+            let scenariosMap = {};
+
+            // Fetch scenarios list
+            try {
+                const response = await fetch("/api/scenarios");
+                const list = await response.json();
+                list.forEach(item => {
+                    const opt = document.createElement("option");
+                    opt.value = item.scenario_id;
+                    opt.textContent = item.name;
+                    selectEl.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Failed to load scenarios:", err);
+            }
+
+            // On selection change
+            selectEl.addEventListener("change", async (e) => {
+                const id = e.target.value;
+                if (!id) {
+                    detailsDiv.classList.add("hidden");
+                    runBtn.disabled = true;
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/scenarios/${id}`);
+                    const scenario = await res.json();
+                    scenariosMap[id] = scenario;
+
+                    // Update UI fields
+                    document.getElementById("scenario-desc").textContent = scenario.description;
+                    document.getElementById("val-critical").textContent = scenario.demand.critical_load_kw;
+                    document.getElementById("val-vessel").textContent = scenario.demand.vessel_load_kw;
+                    document.getElementById("val-solar").textContent = scenario.supply.solar_kw;
+                    document.getElementById("val-battery").textContent = scenario.supply.battery_charge_kwh;
+                    document.getElementById("val-battery-max").textContent = scenario.supply.battery_max_kwh;
+                    document.getElementById("val-grid").textContent = scenario.supply.grid_available ? "Online" : "Offline";
+                    
+                    detailsDiv.classList.remove("hidden");
+                    runBtn.disabled = false;
+                } catch (err) {
+                    console.error("Failed to fetch scenario details:", err);
+                }
+            });
+
+            // Run evaluation
+            runBtn.addEventListener("click", async () => {
+                const id = selectEl.value;
+                if (!id) return;
+
+                runBtn.textContent = "Evaluating...";
+                runBtn.disabled = true;
+
+                try {
+                    const response = await fetch(`/api/evaluate/${id}`, { method: "POST" });
+                    const result = await response.json();
+
+                    // Render output
+                    document.getElementById("eval-status").textContent = result.status.replace("_", " ").toUpperCase();
+                    
+                    // Style status banner
+                    const banner = document.getElementById("eval-status-banner");
+                    banner.className = "status-banner status-" + result.status;
+
+                    document.getElementById("eval-summary").textContent = result.summary;
+
+                    if (result.recommendation) {
+                        const rec = result.recommendation;
+                        document.getElementById("route-solar-port").textContent = rec.solar_draw_kw.toFixed(1);
+                        document.getElementById("route-solar-battery").textContent = rec.battery_charge_kw.toFixed(1);
+                        document.getElementById("route-grid-port").textContent = rec.grid_draw_kw.toFixed(1);
+                        document.getElementById("route-battery-port").textContent = rec.battery_draw_kw.toFixed(1);
+                        document.getElementById("route-generator-port").textContent = rec.generator_draw_kw.toFixed(1);
+                        
+                        document.getElementById("planner-rationale").textContent = rec.rationale;
+                        document.getElementById("planner-alignment").textContent = rec.priority_alignment;
+                    }
+
+                    if (result.safety_review) {
+                        const safety = result.safety_review;
+                        const safeEl = document.getElementById("safety-safe");
+                        safeEl.textContent = safety.is_safe ? "PASSED" : "FAILED";
+                        safeEl.className = safety.is_safe ? "safe-passed" : "safe-failed";
+
+                        // Violations list
+                        const violationsUl = document.getElementById("safety-violations");
+                        violationsUl.innerHTML = "";
+                        safety.violations.forEach(v => {
+                            const li = document.createElement("li");
+                            li.textContent = v;
+                            violationsUl.appendChild(li);
+                        });
+
+                        // Warnings list
+                        const warningsUl = document.getElementById("safety-warnings");
+                        warningsUl.innerHTML = "";
+                        
+                        // Merge planner warnings and reviewer warnings
+                        const allWarnings = [...(result.recommendation?.warnings || []), ...(safety.warnings || [])];
+                        allWarnings.forEach(w => {
+                            const li = document.createElement("li");
+                            li.textContent = w;
+                            warningsUl.appendChild(li);
+                        });
+                    }
+
+                    resultSection.classList.remove("hidden");
+                } catch (err) {
+                    console.error("Evaluation request failed:", err);
+                } finally {
+                    runBtn.textContent = "Run Operator Evaluation";
+                    runBtn.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

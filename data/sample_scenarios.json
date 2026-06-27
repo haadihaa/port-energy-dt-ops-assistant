@@ -1,0 +1,53 @@
+[
+  {
+    "scenario_id": "normal_ops_01",
+    "name": "Normal Day Operations",
+    "description": "Sunny day with full utility grid connectivity. Solar generation is high, and all demand, including vessel shore power, is served normally.",
+    "supply": {
+      "solar_kw": 120.0,
+      "battery_charge_kwh": 40.0,
+      "battery_max_kwh": 100.0,
+      "grid_available": true,
+      "backup_generator_kw": 50.0
+    },
+    "demand": {
+      "critical_load_kw": 30.0,
+      "vessel_load_kw": 80.0,
+      "other_load_kw": 20.0
+    }
+  },
+  {
+    "scenario_id": "grid_outage_02",
+    "name": "Grid Blackout Disruption",
+    "description": "Utility grid goes offline during a storm. The system must rely on battery reserves, local solar, and backup generation to keep critical loads online.",
+    "supply": {
+      "solar_kw": 40.0,
+      "battery_charge_kwh": 60.0,
+      "battery_max_kwh": 100.0,
+      "grid_available": false,
+      "backup_generator_kw": 50.0
+    },
+    "demand": {
+      "critical_load_kw": 35.0,
+      "vessel_load_kw": 50.0,
+      "other_load_kw": 10.0
+    }
+  },
+  {
+    "scenario_id": "tight_capacity_03",
+    "name": "Extreme Capacity Constraints",
+    "description": "Grid is offline, solar generation is minimal due to heavy overcast conditions, and battery reserves are depleted. Serving critical operations is highly constrained.",
+    "supply": {
+      "solar_kw": 10.0,
+      "battery_charge_kwh": 5.0,
+      "battery_max_kwh": 100.0,
+      "grid_available": false,
+      "backup_generator_kw": 30.0
+    },
+    "demand": {
+      "critical_load_kw": 40.0,
+      "vessel_load_kw": 60.0,
+      "other_load_kw": 15.0
+    }
+  }
+]
