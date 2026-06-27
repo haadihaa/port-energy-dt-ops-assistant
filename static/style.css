@@ -316,6 +316,14 @@ select:focus {
     margin-top: 0.5rem;
 }
 
+.list-label {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
 .safe-passed {
     color: var(--color-success);
     font-weight: bold;
