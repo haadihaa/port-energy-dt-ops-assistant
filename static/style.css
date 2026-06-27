@@ -214,6 +214,23 @@ select:focus {
     font-weight: 500;
 }
 
+/* Top-level system error banner — distinct from evaluation result banners */
+#error-banner {
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--color-error);
+    border-left: 4px solid var(--color-error);
+    color: var(--text-primary);
+    padding: 0.875rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+}
+
+#error-banner strong {
+    color: var(--color-error);
+    margin-right: 0.35rem;
+}
+
 .status-success {
     background-color: rgba(16, 185, 129, 0.15);
     border: 1px solid var(--color-success);
