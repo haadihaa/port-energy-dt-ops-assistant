@@ -224,11 +224,18 @@
                         // Violations list
                         const violationsUl = document.getElementById("safety-violations");
                         violationsUl.innerHTML = "";
-                        safety.violations.forEach(v => {
+                        if (safety.violations.length === 0) {
                             const li = document.createElement("li");
-                            li.textContent = v;
+                            li.textContent = "No safety violations.";
+                            li.style.color = "var(--color-success)";
                             violationsUl.appendChild(li);
-                        });
+                        } else {
+                            safety.violations.forEach(v => {
+                                const li = document.createElement("li");
+                                li.textContent = v;
+                                violationsUl.appendChild(li);
+                            });
+                        }
 
                         // Warnings list
                         const warningsUl = document.getElementById("safety-warnings");
@@ -236,11 +243,18 @@
                         
                         // Merge planner warnings and reviewer warnings
                         const allWarnings = [...(result.recommendation?.warnings || []), ...(safety.warnings || [])];
-                        allWarnings.forEach(w => {
+                        if (allWarnings.length === 0) {
                             const li = document.createElement("li");
-                            li.textContent = w;
+                            li.textContent = "No warnings.";
+                            li.style.color = "var(--text-secondary)";
                             warningsUl.appendChild(li);
-                        });
+                        } else {
+                            allWarnings.forEach(w => {
+                                const li = document.createElement("li");
+                                li.textContent = w;
+                                warningsUl.appendChild(li);
+                            });
+                        }
                     }
 
                     resultSection.classList.remove("hidden");
