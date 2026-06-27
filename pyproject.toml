@@ -18,6 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "httpx2",
 ]
 
 [tool.hatch.build.targets.wheel]
