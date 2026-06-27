@@ -231,6 +231,14 @@ select:focus {
     margin-right: 0.35rem;
 }
 
+#loading-status {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    min-height: 1.2em;
+}
+
+
 .status-success {
     background-color: rgba(16, 185, 129, 0.15);
     border: 1px solid var(--color-success);
