@@ -13,6 +13,11 @@
     </header>
 
     <main class="app-container">
+        <!-- Error Banner for User Feedback -->
+        <div id="error-banner" class="status-banner status-safety_failure hidden">
+            <strong>System Error:</strong> <span id="error-message"></span>
+        </div>
+
         <section class="controls-card">
             <h2>Select Disruption Scenario</h2>
             <div class="control-group">
@@ -93,13 +98,27 @@
             const runBtn = document.getElementById("run-btn");
             const detailsDiv = document.getElementById("scenario-details");
             const resultSection = document.getElementById("result-section");
+            const errorBanner = document.getElementById("error-banner");
+            const errorMessage = document.getElementById("error-message");
             
             // State
             let scenariosMap = {};
 
+            function showError(msg) {
+                errorMessage.textContent = msg;
+                errorBanner.classList.remove("hidden");
+            }
+
+            function clearError() {
+                errorMessage.textContent = "";
+                errorBanner.classList.add("hidden");
+            }
+
             // Fetch scenarios list
             try {
+                clearError();
                 const response = await fetch("/api/scenarios");
+                if (!response.ok) throw new Error("Failed response from server");
                 const list = await response.json();
                 list.forEach(item => {
                     const opt = document.createElement("option");
@@ -109,11 +128,13 @@
                 });
             } catch (err) {
                 console.error("Failed to load scenarios:", err);
+                showError("Failed to load available scenarios. Please ensure the local backend server is running.");
             }
 
             // On selection change
             selectEl.addEventListener("change", async (e) => {
                 const id = e.target.value;
+                clearError();
                 if (!id) {
                     detailsDiv.classList.add("hidden");
                     runBtn.disabled = true;
@@ -122,6 +143,7 @@
 
                 try {
                     const res = await fetch(`/api/scenarios/${id}`);
+                    if (!res.ok) throw new Error("Failed to fetch scenario details");
                     const scenario = await res.json();
                     scenariosMap[id] = scenario;
 
@@ -138,6 +160,9 @@
                     runBtn.disabled = false;
                 } catch (err) {
                     console.error("Failed to fetch scenario details:", err);
+                    showError("Failed to load scenario details. Please check the network connection and try again.");
+                    detailsDiv.classList.add("hidden");
+                    runBtn.disabled = true;
                 }
             });
 
@@ -146,11 +171,13 @@
                 const id = selectEl.value;
                 if (!id) return;
 
+                clearError();
                 runBtn.textContent = "Evaluating...";
                 runBtn.disabled = true;
 
                 try {
                     const response = await fetch(`/api/evaluate/${id}`, { method: "POST" });
+                    if (!response.ok) throw new Error("Evaluation request failed");
                     const result = await response.json();
 
                     // Render output
@@ -205,6 +232,8 @@
                     resultSection.classList.remove("hidden");
                 } catch (err) {
                     console.error("Evaluation request failed:", err);
+                    showError("Failed to evaluate scenario. Ensure the backend endpoint is accessible and try again.");
+                    resultSection.classList.add("hidden");
                 } finally {
                     runBtn.textContent = "Run Operator Evaluation";
                     runBtn.disabled = false;
