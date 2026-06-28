@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Port Energy Digital Twin Ops Assistant</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
     <header class="app-header">
         <h1>Port Energy Digital Twin Ops Assistant</h1>
-        <p class="tagline">A two-agent decision-support assistant prioritizing port operational resilience, clean energy utilization, and grid cost management.</p>
+        <p class="tagline">A two-agent decision-support assistant prioritizing port operational resilience, clean energy
+            utilization, and grid cost management.</p>
     </header>
 
     <main class="app-container">
@@ -26,7 +29,7 @@
                     <option value="">-- Select a Scenario --</option>
                 </select>
             </div>
-            
+
             <div id="scenario-details" class="scenario-details hidden">
                 <h3>Scenario Context</h3>
                 <p id="scenario-desc"></p>
@@ -34,7 +37,8 @@
                     <div><strong>Critical Load:</strong> <span id="val-critical">0</span> kW</div>
                     <div><strong>Vessel Demand:</strong> <span id="val-vessel">0</span> kW</div>
                     <div><strong>Solar Capacity:</strong> <span id="val-solar">0</span> kW</div>
-                    <div><strong>Battery Level:</strong> <span id="val-battery">0</span> kWh / <span id="val-battery-max">0</span> kWh</div>
+                    <div><strong>Battery Level:</strong> <span id="val-battery">0</span> kWh / <span
+                            id="val-battery-max">0</span> kWh</div>
                     <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
                 </div>
             </div>
@@ -48,7 +52,7 @@
             <div class="status-banner" id="eval-status-banner">
                 <strong>Status:</strong> <span id="eval-status">N/A</span>
             </div>
-            
+
             <p id="eval-summary" class="eval-summary-text"></p>
 
             <div class="results-layout">
@@ -62,11 +66,26 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td>Solar to Port Load</td><td id="route-solar-port">0.0</td></tr>
-                            <tr><td>Solar to Battery Charge</td><td id="route-solar-battery">0.0</td></tr>
-                            <tr><td>Grid to Port Load</td><td id="route-grid-port">0.0</td></tr>
-                            <tr><td>Battery to Port Load</td><td id="route-battery-port">0.0</td></tr>
-                            <tr><td>Generator to Port Load</td><td id="route-generator-port">0.0</td></tr>
+                            <tr>
+                                <td>Solar to Port Load</td>
+                                <td id="route-solar-port">0.0</td>
+                            </tr>
+                            <tr>
+                                <td>Solar to Battery Charge</td>
+                                <td id="route-solar-battery">0.0</td>
+                            </tr>
+                            <tr>
+                                <td>Grid to Port Load</td>
+                                <td id="route-grid-port">0.0</td>
+                            </tr>
+                            <tr>
+                                <td>Battery to Port Load</td>
+                                <td id="route-battery-port">0.0</td>
+                            </tr>
+                            <tr>
+                                <td>Generator to Port Load</td>
+                                <td id="route-generator-port">0.0</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -76,7 +95,8 @@
                     <div class="insight-box">
                         <h4>Planner Rationale</h4>
                         <p id="planner-rationale">No plan proposed yet.</p>
-                        <p class="alignment-note"><strong>Priority Alignment:</strong> <span id="planner-alignment">N/A</span></p>
+                        <p class="alignment-note"><strong>Priority Alignment:</strong> <span
+                                id="planner-alignment">N/A</span></p>
                     </div>
                     <div class="insight-box">
                         <h4>Safety & Constraints Check</h4>
@@ -92,7 +112,7 @@
     </main>
 
     <footer class="app-footer">
-        <p>Local-First Decision-Support Prototype | Operations Planner & Safety Reviewer Agent Framework</p>
+        <p>Local-Designed and developed by Mohammad Hadi Hamednia | Port Energy Digital Twin Ops Assistant</p>
     </footer>
 
     <script>
@@ -104,7 +124,7 @@
             const errorBanner = document.getElementById("error-banner");
             const errorMessage = document.getElementById("error-message");
             const loadingStatus = document.getElementById("loading-status");
-            
+
             // State
             let scenariosMap = {};
 
@@ -168,7 +188,7 @@
                     document.getElementById("val-battery").textContent = scenario.supply.battery_charge_kwh;
                     document.getElementById("val-battery-max").textContent = scenario.supply.battery_max_kwh;
                     document.getElementById("val-grid").textContent = scenario.supply.grid_available ? "Online" : "Offline";
-                    
+
                     detailsDiv.classList.remove("hidden");
                     runBtn.disabled = false;
                     clearLoading();
@@ -198,7 +218,7 @@
 
                     // Render output
                     document.getElementById("eval-status").textContent = result.status.replace("_", " ").toUpperCase();
-                    
+
                     // Style status banner
                     const banner = document.getElementById("eval-status-banner");
                     banner.className = "status-banner status-" + result.status;
@@ -212,7 +232,7 @@
                         document.getElementById("route-grid-port").textContent = rec.grid_draw_kw.toFixed(1);
                         document.getElementById("route-battery-port").textContent = rec.battery_draw_kw.toFixed(1);
                         document.getElementById("route-generator-port").textContent = rec.generator_draw_kw.toFixed(1);
-                        
+
                         document.getElementById("planner-rationale").textContent = rec.rationale;
                         document.getElementById("planner-alignment").textContent = rec.priority_alignment;
                     }
@@ -242,7 +262,7 @@
                         // Warnings list
                         const warningsUl = document.getElementById("safety-warnings");
                         warningsUl.innerHTML = "";
-                        
+
                         // Merge planner warnings and reviewer warnings
                         const allWarnings = [...(result.recommendation?.warnings || []), ...(safety.warnings || [])];
                         if (allWarnings.length === 0) {
@@ -273,4 +293,5 @@
         });
     </script>
 </body>
+
 </html>

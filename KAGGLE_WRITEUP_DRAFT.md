@@ -105,7 +105,7 @@ This project shows how agent systems can support operational decision-making in 
 
 ## Repository
 
-[Add your GitHub repo link here]
+[https://github.com/haadihaa/port-energy-dt-ops-assistant]
 
 ## Demo Video
 
