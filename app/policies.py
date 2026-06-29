@@ -6,7 +6,7 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
     Routing logic:
     1. Satisfy total port demand.
     2. Use renewable energy directly first.
-    3. If there is a remaining deficit: Grid -> Battery -> Backup Generator.
+    3. If there is a remaining deficit: Grid -> Backup Generator -> Battery.
     4. If there is a surplus after serving demand:
        - keep generator off,
        - charge battery toward the 80% target,
@@ -80,11 +80,6 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
         remaining_grid_headroom -= grid_to_battery
         battery_room_to_target -= grid_to_battery
 
-    if remaining_demand > 0:
-        battery_to_port = min(remaining_demand, battery_available_kwh)
-        remaining_demand -= battery_to_port
-        battery_available_kwh -= battery_to_port
-
     if remaining_demand > 0 and generator_capacity_kw > 0:
         if remaining_demand < generator_min_kw:
             grid_reduction_needed = generator_min_kw - remaining_demand
@@ -95,22 +90,24 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
                 remaining_demand += grid_reduction
                 grid_reduction_needed -= grid_reduction
 
-            if grid_reduction_needed > 0 and battery_to_port > 0:
-                battery_reduction = min(battery_to_port, grid_reduction_needed)
-                battery_to_port -= battery_reduction
-                remaining_demand += battery_reduction
-                grid_reduction_needed -= battery_reduction
-
             generator_to_port = min(generator_min_kw, generator_capacity_kw)
             remaining_demand -= generator_to_port
 
+            if remaining_demand < 0:
+                remaining_demand = 0.0
+
             if grid_reduction_needed > 0:
                 warnings.append(
-                    "Backup generator minimum loading required reducing other sources, and some excess generation may remain unavoidable."
+                    "Backup generator minimum loading required reducing grid import to maintain feasible dispatch."
                 )
         else:
             generator_to_port = min(remaining_demand, generator_capacity_kw)
             remaining_demand -= generator_to_port
+
+    if remaining_demand > 0:
+        battery_to_port = min(remaining_demand, battery_available_kwh)
+        remaining_demand -= battery_to_port
+        battery_available_kwh -= battery_to_port
 
     total_served = solar_to_port + grid_to_port + battery_to_port + generator_to_port
     unmet_total_load = max(0.0, total_demand - total_served)
@@ -144,13 +141,13 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
     else:
         rationale = (
             "Attempted to satisfy demand using renewable energy first, then grid import, "
-            "then battery discharge, then backup generation while respecting the minimum operational loading rule."
+            "then backup generation, and finally battery discharge as the last reserve."
         )
 
     priority_alignment = (
         "Resilience first by serving demand as far as possible; renewable energy is used directly before other sources; "
-        "battery is restored toward the 80% operating target when possible; backup generation remains the last source "
-        "and must respect minimum operational loading."
+        "grid import is used before backup generation when available; backup generation is used before battery discharge "
+        "to preserve stored energy; battery is restored toward the 80% operating target when possible."
     )
 
     return PlannerRecommendation(
