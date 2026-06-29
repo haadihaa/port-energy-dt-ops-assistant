@@ -23,6 +23,7 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             scenario_id=scenario.scenario_id,
             status="insufficient_information",
             resilience_met=False,
+            estimated_endurance_hours=None,
             summary="Invalid or negative capacity/demand values provided in scenario inputs."
         )
 
@@ -63,6 +64,17 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) exceeds backup capacity ({supply.backup_generator_kw:.1f} kW)."
         )
 
+    estimated_endurance_hours = None
+
+    if recommendation.battery_draw_kw > 0:
+        estimated_endurance_hours = supply.battery_charge_kwh / recommendation.battery_draw_kw
+
+    if estimated_endurance_hours is not None and estimated_endurance_hours < 8:
+        warnings.append("Low endurance reserve: supervisor review required.")
+        warnings.append(
+            "Recommended actions: reduce vessel demand and/or activate backup generation to prevent service failure."
+        )
+
     is_safe = len(violations) == 0
     safety_review = SafetyReview(
         is_safe=is_safe,
@@ -77,6 +89,7 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             recommendation=recommendation,
             safety_review=safety_review,
             resilience_met=False,
+            estimated_endurance_hours=estimated_endurance_hours,
             summary="Proposed routing plan failed physical feasibility checks."
         )
 
@@ -103,8 +116,18 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         status = "success"
         summary = "Energy routing plan satisfies critical operational load within safe physical boundaries."
 
+    if estimated_endurance_hours is not None:
+        summary += f" Estimated endurance: {estimated_endurance_hours:.1f} hours."
+    elif recommendation.grid_draw_kw > 0 and supply.grid_available:
+        summary += " Estimated endurance: continuous while utility grid remains available."
+    else:
+        summary += " Estimated endurance: not available under current modeling assumptions."
+
     if recommendation.warnings:
-        summary += f" Warnings: {'; '.join(recommendation.warnings)}"
+        summary += f" Planner warnings: {'; '.join(recommendation.warnings)}"
+
+    if warnings:
+        summary += f" Safety actions: {'; '.join(warnings)}"
 
     return EvaluationResult(
         scenario_id=scenario.scenario_id,
@@ -113,5 +136,6 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         safety_review=safety_review,
         resilience_met=resilience_met,
         renewable_fraction=renewable_fraction,
+        estimated_endurance_hours=estimated_endurance_hours,
         summary=summary
     )

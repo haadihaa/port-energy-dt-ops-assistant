@@ -11,8 +11,10 @@
 <body>
     <header class="app-header">
         <h1>Port Energy Digital Twin Ops Assistant</h1>
-        <p class="tagline">A two-agent decision-support assistant prioritizing port operational resilience, clean energy
-            utilization, and grid cost management.</p>
+        <p class="tagline">
+            A two-agent decision-support assistant prioritizing port operational resilience, clean energy
+            utilization, and grid cost management.
+        </p>
     </header>
 
     <main class="app-container">
@@ -52,12 +54,12 @@
                 <div class="metrics-grid">
                     <div class="control-group">
                         <label for="custom-critical"><strong>Critical Load (kW)</strong></label>
-                        <input id="custom-critical" type="number" min="0" step="0.1" value="40">
+                        <input id="custom-critical" type="number" min="0" step="0.1" value="10">
                     </div>
 
                     <div class="control-group">
                         <label for="custom-vessel"><strong>Vessel Demand (kW)</strong></label>
-                        <input id="custom-vessel" type="number" min="0" step="0.1" value="60">
+                        <input id="custom-vessel" type="number" min="0" step="0.1" value="20">
                     </div>
 
                     <div class="control-group">
@@ -67,12 +69,12 @@
 
                     <div class="control-group">
                         <label for="custom-solar"><strong>Solar Capacity (kW)</strong></label>
-                        <input id="custom-solar" type="number" min="0" step="0.1" value="10">
+                        <input id="custom-solar" type="number" min="0" step="0.1" value="15">
                     </div>
 
                     <div class="control-group">
                         <label for="custom-battery"><strong>Battery Level (kWh)</strong></label>
-                        <input id="custom-battery" type="number" min="0" step="0.1" value="5">
+                        <input id="custom-battery" type="number" min="0" step="0.1" value="80">
                     </div>
 
                     <div class="control-group">
@@ -82,7 +84,7 @@
 
                     <div class="control-group">
                         <label for="custom-generator"><strong>Backup Generator (kW)</strong></label>
-                        <input id="custom-generator" type="number" min="0" step="0.1" value="0">
+                        <input id="custom-generator" type="number" min="0" step="0.1" value="5">
                     </div>
 
                     <div class="control-group">
@@ -107,11 +109,18 @@
 
         <section id="result-section" class="results-card hidden">
             <h2>Evaluation Analysis Result</h2>
+
             <div class="status-banner" id="eval-status-banner">
                 <strong>Status:</strong> <span id="eval-status">N/A</span>
             </div>
 
-            <p id="eval-summary" class="eval-summary-text"></p>
+            <div id="supervisor-alert" class="supervisor-alert hidden">
+                <h3>Supervisor Attention Required</h3>
+                <p id="supervisor-alert-text">
+                    Estimated endurance is below the safe operating threshold. Immediate mitigation is required.
+                </p>
+                <ul id="supervisor-alert-actions" class="supervisor-alert-actions"></ul>
+            </div>
 
             <div class="results-layout">
                 <div class="routing-table-container">
@@ -159,24 +168,34 @@
                             <span id="planner-alignment">N/A</span>
                         </p>
                     </div>
-
-                    <div class="insight-box">
-                        <h4>Safety & Constraints Check</h4>
-                        <p><strong>Is Safe:</strong> <span id="safety-safe">N/A</span></p>
-
-                        <p class="list-label">Violations</p>
-                        <ul id="safety-violations" class="violations-list"></ul>
-
-                        <p class="list-label">Warnings</p>
-                        <ul id="safety-warnings" class="warnings-list"></ul>
-                    </div>
                 </div>
+            </div>
+
+            <div class="safety-block">
+                <h3>Safety & Constraints Check</h3>
+                <div class="insight-box">
+                    <p><strong>Is Safe:</strong> <span id="safety-safe">N/A</span></p>
+
+                    <p class="list-label">Violations</p>
+                    <ul id="safety-violations" class="violations-list"></ul>
+
+                    <p class="list-label">Warnings</p>
+                    <ul id="safety-warnings" class="warnings-list"></ul>
+                </div>
+            </div>
+
+            <div id="operational-notes" class="operational-notes hidden">
+                <h3>Operational Notes</h3>
+                <p id="note-endurance" class="note-line"></p>
+                <p id="note-planner-warnings" class="note-line"></p>
+                <p id="note-safety-actions" class="note-line"></p>
+                <p id="note-required-actions" class="note-line"></p>
             </div>
         </section>
     </main>
 
     <footer class="app-footer">
-        <p>Local-Designed and developed by Mohammad Hadi Hamednia | Port Energy Digital Twin Ops Assistant</p>
+        <p>Designed and developed by Mohammad Hadi Hamednia | Port Energy Digital Twin Ops Assistant</p>
     </footer>
 
     <script>
@@ -232,6 +251,155 @@
                 };
             }
 
+            function renderSafety(result) {
+                const safety = result.safety_review;
+                const safeEl = document.getElementById("safety-safe");
+                const violationsUl = document.getElementById("safety-violations");
+                const warningsUl = document.getElementById("safety-warnings");
+
+                violationsUl.innerHTML = "";
+                warningsUl.innerHTML = "";
+
+                if (!safety) {
+                    safeEl.textContent = "N/A";
+                    safeEl.className = "";
+                    return;
+                }
+
+                const allWarnings = [
+                    ...(result.recommendation?.warnings || []),
+                    ...(safety.warnings || [])
+                ];
+
+                if (!safety.is_safe) {
+                    safeEl.textContent = "FAILED";
+                    safeEl.className = "safe-failed";
+                } else if (allWarnings.length > 0) {
+                    safeEl.textContent = "PASSED WITH WARNING";
+                    safeEl.className = "safe-warning";
+                } else {
+                    safeEl.textContent = "PASSED";
+                    safeEl.className = "safe-passed";
+                }
+
+                if (safety.violations.length === 0) {
+                    const li = document.createElement("li");
+                    li.textContent = "No safety violations.";
+                    li.className = "list-success";
+                    violationsUl.appendChild(li);
+                } else {
+                    safety.violations.forEach(v => {
+                        const li = document.createElement("li");
+                        li.textContent = v;
+                        violationsUl.appendChild(li);
+                    });
+                }
+
+                if (allWarnings.length === 0) {
+                    const li = document.createElement("li");
+                    li.textContent = "No warnings.";
+                    li.className = "list-muted";
+                    warningsUl.appendChild(li);
+                } else {
+                    allWarnings.forEach(w => {
+                        const li = document.createElement("li");
+                        li.textContent = w;
+                        warningsUl.appendChild(li);
+                    });
+                }
+            }
+
+            function renderOperationalNotes(result) {
+                const notesBox = document.getElementById("operational-notes");
+                const noteEndurance = document.getElementById("note-endurance");
+                const notePlannerWarnings = document.getElementById("note-planner-warnings");
+                const noteSafetyActions = document.getElementById("note-safety-actions");
+                const noteRequiredActions = document.getElementById("note-required-actions");
+
+                noteEndurance.textContent = "";
+                notePlannerWarnings.textContent = "";
+                noteSafetyActions.textContent = "";
+                noteRequiredActions.textContent = "";
+
+                if (result.estimated_endurance_hours !== null && result.estimated_endurance_hours !== undefined) {
+                    noteEndurance.textContent = `Estimated endurance: ${result.estimated_endurance_hours.toFixed(1)} hours.`;
+                } else if (result.recommendation && result.recommendation.grid_draw_kw > 0) {
+                    noteEndurance.textContent = "Estimated endurance: Continuous while utility grid remains available.";
+                } else {
+                    noteEndurance.textContent = "Estimated endurance: Not available under current modeling assumptions.";
+                }
+
+                const plannerWarnings = result.recommendation?.warnings || [];
+                if (plannerWarnings.length > 0) {
+                    notePlannerWarnings.textContent = `Planner warnings: ${plannerWarnings.join(" ")}`;
+                }
+
+                const safetyWarnings = result.safety_review?.warnings || [];
+                const supervisorWarnings = safetyWarnings.filter(w =>
+                    w.toLowerCase().includes("supervisor") || w.toLowerCase().includes("low endurance")
+                );
+                const requiredActions = safetyWarnings.filter(w =>
+                    w.toLowerCase().includes("recommended actions") || w.toLowerCase().includes("required actions")
+                );
+
+                if (supervisorWarnings.length > 0) {
+                    noteSafetyActions.textContent = `Safety actions: ${supervisorWarnings.join(" ")}`;
+                }
+
+                if (requiredActions.length > 0) {
+                    noteRequiredActions.textContent = requiredActions.join(" ");
+                }
+
+                const hasAnyNotes =
+                    noteEndurance.textContent ||
+                    notePlannerWarnings.textContent ||
+                    noteSafetyActions.textContent ||
+                    noteRequiredActions.textContent;
+
+                notesBox.classList.toggle("hidden", !hasAnyNotes);
+            }
+
+            function renderSupervisorAlert(result) {
+                const alertBox = document.getElementById("supervisor-alert");
+                const alertText = document.getElementById("supervisor-alert-text");
+                const alertActions = document.getElementById("supervisor-alert-actions");
+
+                alertActions.innerHTML = "";
+
+                const endurance = result.estimated_endurance_hours;
+                const safetyWarnings = result.safety_review?.warnings || [];
+                const requiredActions = safetyWarnings.filter(w =>
+                    w.toLowerCase().includes("recommended actions") || w.toLowerCase().includes("required actions")
+                );
+
+                if (endurance !== null && endurance !== undefined && endurance < 4) {
+                    alertText.textContent =
+                        `Estimated endurance is ${endurance.toFixed(1)} hours, which is below the 4.0-hour escalation threshold. Immediate mitigation is required.`;
+
+                    if (requiredActions.length > 0) {
+                        requiredActions.forEach(action => {
+                            const li = document.createElement("li");
+                            li.textContent = action;
+                            alertActions.appendChild(li);
+                        });
+                    } else {
+                        [
+                            "Reduce vessel demand.",
+                            "Activate backup generation if available.",
+                            "Reduce non-critical load to preserve resilience."
+                        ].forEach(action => {
+                            const li = document.createElement("li");
+                            li.textContent = action;
+                            alertActions.appendChild(li);
+                        });
+                    }
+
+                    alertBox.classList.remove("hidden");
+                } else {
+                    alertBox.classList.add("hidden");
+                }
+            }
+
             try {
                 clearError();
                 const response = await fetch("/api/scenarios");
@@ -270,7 +438,7 @@
                 }
 
                 customForm.classList.add("hidden");
-                showLoading("Loading scenario details…");
+                showLoading("Loading scenario details...");
 
                 try {
                     const res = await fetch(`/api/scenarios/${id}`);
@@ -307,7 +475,7 @@
                 clearError();
                 runBtn.textContent = "Evaluating...";
                 runBtn.disabled = true;
-                showLoading("Running two-agent evaluation workflow…");
+                showLoading("Running two-agent evaluation workflow...");
 
                 try {
                     let response;
@@ -315,9 +483,7 @@
                     if (id === "custom") {
                         response = await fetch("/api/evaluate-custom", {
                             method: "POST",
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
+                            headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(getCustomPayload())
                         });
                     } else {
@@ -331,12 +497,11 @@
 
                     const result = await response.json();
 
-                    document.getElementById("eval-status").textContent = result.status.replace("_", " ").toUpperCase();
+                    document.getElementById("eval-status").textContent =
+                        result.status.replaceAll("_", " ").toUpperCase();
 
                     const banner = document.getElementById("eval-status-banner");
                     banner.className = "status-banner status-" + result.status;
-
-                    document.getElementById("eval-summary").textContent = result.summary;
 
                     if (result.recommendation) {
                         const rec = result.recommendation;
@@ -347,49 +512,22 @@
                         document.getElementById("route-generator-port").textContent = rec.generator_draw_kw.toFixed(1);
                         document.getElementById("planner-rationale").textContent = rec.rationale;
                         document.getElementById("planner-alignment").textContent = rec.priority_alignment;
+                    } else {
+                        document.getElementById("route-solar-port").textContent = "0.0";
+                        document.getElementById("route-solar-battery").textContent = "0.0";
+                        document.getElementById("route-grid-port").textContent = "0.0";
+                        document.getElementById("route-battery-port").textContent = "0.0";
+                        document.getElementById("route-generator-port").textContent = "0.0";
+                        document.getElementById("planner-rationale").textContent = "No plan proposed yet.";
+                        document.getElementById("planner-alignment").textContent = "N/A";
                     }
 
-                    if (result.safety_review) {
-                        const safety = result.safety_review;
-                        const safeEl = document.getElementById("safety-safe");
-                        safeEl.textContent = safety.is_safe ? "PASSED" : "FAILED";
-                        safeEl.className = safety.is_safe ? "safe-passed" : "safe-failed";
-
-                        const violationsUl = document.getElementById("safety-violations");
-                        violationsUl.innerHTML = "";
-                        if (safety.violations.length === 0) {
-                            const li = document.createElement("li");
-                            li.textContent = "No safety violations.";
-                            li.style.color = "var(--color-success)";
-                            violationsUl.appendChild(li);
-                        } else {
-                            safety.violations.forEach(v => {
-                                const li = document.createElement("li");
-                                li.textContent = v;
-                                violationsUl.appendChild(li);
-                            });
-                        }
-
-                        const warningsUl = document.getElementById("safety-warnings");
-                        warningsUl.innerHTML = "";
-
-                        const allWarnings = [...(result.recommendation?.warnings || []), ...(safety.warnings || [])];
-
-                        if (allWarnings.length === 0) {
-                            const li = document.createElement("li");
-                            li.textContent = "No warnings.";
-                            li.style.color = "var(--text-secondary)";
-                            warningsUl.appendChild(li);
-                        } else {
-                            allWarnings.forEach(w => {
-                                const li = document.createElement("li");
-                                li.textContent = w;
-                                warningsUl.appendChild(li);
-                            });
-                        }
-                    }
+                    renderSafety(result);
+                    renderSupervisorAlert(result);
+                    renderOperationalNotes(result);
 
                     resultSection.classList.remove("hidden");
+                    resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
                 } catch (err) {
                     console.error("Evaluation request failed:", err);
                     showError(err.message || "Failed to evaluate scenario.");

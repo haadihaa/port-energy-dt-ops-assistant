@@ -7,14 +7,14 @@
     --text-primary: #f3f4f6;
     --text-secondary: #9ca3af;
     --border-color: #374151;
-    
+
     --primary-color: #3b82f6;
     --primary-hover: #2563eb;
-    
+
     --color-success: #10b981;
     --color-warning: #f59e0b;
     --color-error: #ef4444;
-    
+
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -65,18 +65,19 @@ body {
 }
 
 /* Cards */
-.controls-card, .results-card {
+.controls-card,
+.results-card {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 1.5rem;
+    padding: 1.25rem;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
 h2 {
     font-size: 1.25rem;
     font-weight: 600;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 0.5rem;
     color: #ffffff;
@@ -112,22 +113,42 @@ label {
     color: var(--text-secondary);
 }
 
-select {
+input,
+select,
+textarea {
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
-    padding: 0.625rem;
+    padding: 0.625rem 0.75rem;
     border-radius: 6px;
     font-size: 0.95rem;
     outline: none;
-    cursor: pointer;
     width: 100%;
-    max-width: 400px;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 
-select:focus {
+select {
+    cursor: pointer;
+    max-width: 400px;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 88px;
+    max-width: 100%;
+    font-family: var(--font-sans);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-secondary);
 }
 
 /* Scenario Details Grid */
@@ -159,6 +180,14 @@ select:focus {
     border: 1px solid var(--border-color);
 }
 
+.metrics-grid .control-group {
+    background-color: var(--bg-tertiary);
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 0;
+}
+
 .metrics-grid span {
     font-family: var(--font-mono);
     color: #ffffff;
@@ -174,7 +203,7 @@ select:focus {
     border-radius: 6px;
     border: none;
     cursor: pointer;
-    transition: background-color 0.2s, opacity 0.2s;
+    transition: background-color 0.2s, opacity 0.2s, transform 0.15s;
     text-align: center;
 }
 
@@ -187,22 +216,27 @@ select:focus {
     background-color: var(--primary-hover);
 }
 
+.btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-/* Results section layout */
+/* Results section */
 .results-layout {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 1.5rem;
-    margin-top: 1.25rem;
+    gap: 1rem;
+    margin-top: 0.75rem;
 }
 
 @media (min-width: 768px) {
     .results-layout {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+        align-items: start;
     }
 }
 
@@ -214,7 +248,7 @@ select:focus {
     font-weight: 500;
 }
 
-/* Top-level system error banner — distinct from evaluation result banners */
+/* Top-level system error banner */
 #error-banner {
     background-color: rgba(239, 68, 68, 0.1);
     border: 1px solid var(--color-error);
@@ -237,7 +271,6 @@ select:focus {
     color: var(--text-secondary);
     min-height: 1.2em;
 }
-
 
 .status-success {
     background-color: rgba(16, 185, 129, 0.15);
@@ -263,10 +296,34 @@ select:focus {
     color: var(--text-primary);
 }
 
-.eval-summary-text {
-    font-size: 0.95rem;
-    margin-bottom: 1.25rem;
-    color: var(--text-primary);
+.supervisor-alert {
+    background-color: rgba(239, 68, 68, 0.14);
+    border: 1px solid var(--color-error);
+    border-left: 5px solid var(--color-error);
+    border-radius: 8px;
+    padding: 0.9rem 1rem 0.8rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.supervisor-alert h3 {
+    color: #ffffff;
+    margin-bottom: 0.45rem;
+}
+
+.supervisor-alert p {
+    color: #ffd7d7;
+    font-size: 0.9rem;
+    margin-bottom: 0.55rem;
+}
+
+.supervisor-alert-actions {
+    margin-left: 1.25rem;
+    font-size: 0.86rem;
+}
+
+.supervisor-alert-actions li {
+    color: #ffe0e0;
+    margin-bottom: 0.3rem;
 }
 
 /* Data Table */
@@ -277,8 +334,9 @@ select:focus {
     text-align: left;
 }
 
-.data-table th, .data-table td {
-    padding: 0.75rem;
+.data-table th,
+.data-table td {
+    padding: 0.7rem;
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -299,7 +357,7 @@ select:focus {
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 1rem;
+    padding: 0.95rem;
     margin-bottom: 1rem;
 }
 
@@ -316,6 +374,14 @@ select:focus {
     margin-top: 0.5rem;
 }
 
+.safety-block {
+    margin-top: 1rem;
+}
+
+.safety-block .insight-box {
+    margin-bottom: 0;
+}
+
 .list-label {
     margin-top: 0.75rem;
     font-size: 0.8rem;
@@ -326,27 +392,56 @@ select:focus {
 
 .safe-passed {
     color: var(--color-success);
-    font-weight: bold;
+    font-weight: 700;
+}
+
+.safe-warning {
+    color: var(--color-warning);
+    font-weight: 700;
 }
 
 .safe-failed {
     color: var(--color-error);
-    font-weight: bold;
+    font-weight: 700;
 }
 
 /* Violations & Warnings Lists */
-.violations-list, .warnings-list {
+.violations-list,
+.warnings-list {
     margin-top: 0.5rem;
-    margin-left: 1.25rem;
-    font-size: 0.825rem;
+    margin-left: 1.2rem;
+    font-size: 0.83rem;
 }
 
 .violations-list li {
     color: var(--color-error);
+    margin-bottom: 0.3rem;
 }
 
 .warnings-list li {
     color: var(--color-warning);
+    margin-bottom: 0.3rem;
+}
+
+.list-success {
+    color: var(--color-success) !important;
+}
+
+.list-muted {
+    color: var(--text-secondary) !important;
+}
+
+.operational-notes {
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.note-line {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+    line-height: 1.45;
 }
 
 /* Utility classes */

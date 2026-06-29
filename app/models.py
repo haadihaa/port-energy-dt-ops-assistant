@@ -48,4 +48,8 @@ class EvaluationResult(BaseModel):
     safety_review: Optional[SafetyReview] = Field(None, description="The completed safety review, if available")
     resilience_met: bool = Field(False, description="True if critical load is fully satisfied")
     renewable_fraction: float = Field(0.0, description="Estimated share of total powered load that came from solar (0.0 to 1.0)")
+    estimated_endurance_hours: Optional[float] = Field(
+        None,
+        description="Estimated endurance in hours under the current routed operating condition"
+    )
     summary: str = Field(..., description="Brief outcome summary of the scenario evaluation")
