@@ -28,7 +28,7 @@ In disruption scenarios, operators need support that is fast, explainable, and l
 This project provides:
 - a FastAPI backend,
 - a local browser-based operator UI,
-- predefined disruption scenarios,
+- Supports predefined and custom disruption scenarios,
 - structured scenario evaluation,
 - a planner/reviewer multi-agent pattern,
 - explicit safety review output.

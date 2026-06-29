@@ -28,7 +28,7 @@ Traditional optimization-heavy tools or production SCADA integrations are often 
 ## Solution
 
 The system models simplified port energy scenarios and runs an operator evaluation flow:
-1. The user selects a predefined disruption scenario in the browser UI.
+1. The user selects a predefined disruption scenario or enters a custom scenario in the browser UI.
 2. The backend evaluates the scenario and produces a structured recommendation.
 3. A planner-style agent proposes an energy-routing approach.
 4. A reviewer-style agent checks safety and feasibility constraints before the result is shown to the operator. [cite:152][cite:246]
