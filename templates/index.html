@@ -16,17 +16,18 @@
     </header>
 
     <main class="app-container">
-        <!-- Error Banner for User Feedback -->
         <div id="error-banner" class="status-banner status-safety_failure hidden">
             <strong>System Error:</strong> <span id="error-message"></span>
         </div>
 
         <section class="controls-card">
             <h2>Select Disruption Scenario</h2>
+
             <div class="control-group">
                 <label for="scenario-select">Available Scenarios:</label>
                 <select id="scenario-select">
                     <option value="">-- Select a Scenario --</option>
+                    <option value="custom">Custom Scenario</option>
                 </select>
             </div>
 
@@ -40,6 +41,63 @@
                     <div><strong>Battery Level:</strong> <span id="val-battery">0</span> kWh / <span
                             id="val-battery-max">0</span> kWh</div>
                     <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
+                    <div><strong>Backup Generator:</strong> <span id="val-generator">0</span> kW</div>
+                    <div><strong>Other Load:</strong> <span id="val-other">0</span> kW</div>
+                </div>
+            </div>
+
+            <div id="custom-scenario-form" class="scenario-details hidden">
+                <h3>Custom Scenario Input</h3>
+
+                <div class="metrics-grid">
+                    <div class="control-group">
+                        <label for="custom-critical"><strong>Critical Load (kW)</strong></label>
+                        <input id="custom-critical" type="number" min="0" step="0.1" value="40">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-vessel"><strong>Vessel Demand (kW)</strong></label>
+                        <input id="custom-vessel" type="number" min="0" step="0.1" value="60">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-other"><strong>Other Load (kW)</strong></label>
+                        <input id="custom-other" type="number" min="0" step="0.1" value="0">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-solar"><strong>Solar Capacity (kW)</strong></label>
+                        <input id="custom-solar" type="number" min="0" step="0.1" value="10">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-battery"><strong>Battery Level (kWh)</strong></label>
+                        <input id="custom-battery" type="number" min="0" step="0.1" value="5">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-battery-max"><strong>Battery Capacity (kWh)</strong></label>
+                        <input id="custom-battery-max" type="number" min="0.1" step="0.1" value="100">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-generator"><strong>Backup Generator (kW)</strong></label>
+                        <input id="custom-generator" type="number" min="0" step="0.1" value="0">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-grid"><strong>Grid Status</strong></label>
+                        <select id="custom-grid">
+                            <option value="online">Online</option>
+                            <option value="offline">Offline</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="custom-description">Scenario Notes (optional)</label>
+                    <textarea id="custom-description" rows="3"
+                        placeholder="Brief custom scenario description"></textarea>
                 </div>
             </div>
 
@@ -92,17 +150,23 @@
 
                 <div class="review-details">
                     <h3>Two-Agent Review Insights</h3>
+
                     <div class="insight-box">
                         <h4>Planner Rationale</h4>
                         <p id="planner-rationale">No plan proposed yet.</p>
-                        <p class="alignment-note"><strong>Priority Alignment:</strong> <span
-                                id="planner-alignment">N/A</span></p>
+                        <p class="alignment-note">
+                            <strong>Priority Alignment:</strong>
+                            <span id="planner-alignment">N/A</span>
+                        </p>
                     </div>
+
                     <div class="insight-box">
                         <h4>Safety & Constraints Check</h4>
                         <p><strong>Is Safe:</strong> <span id="safety-safe">N/A</span></p>
+
                         <p class="list-label">Violations</p>
                         <ul id="safety-violations" class="violations-list"></ul>
+
                         <p class="list-label">Warnings</p>
                         <ul id="safety-warnings" class="warnings-list"></ul>
                     </div>
@@ -120,13 +184,21 @@
             const selectEl = document.getElementById("scenario-select");
             const runBtn = document.getElementById("run-btn");
             const detailsDiv = document.getElementById("scenario-details");
+            const customForm = document.getElementById("custom-scenario-form");
             const resultSection = document.getElementById("result-section");
             const errorBanner = document.getElementById("error-banner");
             const errorMessage = document.getElementById("error-message");
             const loadingStatus = document.getElementById("loading-status");
 
-            // State
-            let scenariosMap = {};
+            const customCritical = document.getElementById("custom-critical");
+            const customVessel = document.getElementById("custom-vessel");
+            const customOther = document.getElementById("custom-other");
+            const customSolar = document.getElementById("custom-solar");
+            const customBattery = document.getElementById("custom-battery");
+            const customBatteryMax = document.getElementById("custom-battery-max");
+            const customGenerator = document.getElementById("custom-generator");
+            const customGrid = document.getElementById("custom-grid");
+            const customDescription = document.getElementById("custom-description");
 
             function showLoading(msg) {
                 loadingStatus.textContent = msg;
@@ -146,11 +218,25 @@
                 errorBanner.classList.add("hidden");
             }
 
-            // Fetch scenarios list
+            function getCustomPayload() {
+                return {
+                    critical_load_kw: Number(customCritical.value),
+                    vessel_load_kw: Number(customVessel.value),
+                    other_load_kw: Number(customOther.value),
+                    solar_kw: Number(customSolar.value),
+                    battery_charge_kwh: Number(customBattery.value),
+                    battery_max_kwh: Number(customBatteryMax.value),
+                    backup_generator_kw: Number(customGenerator.value),
+                    grid_available: customGrid.value === "online",
+                    description: customDescription.value.trim()
+                };
+            }
+
             try {
                 clearError();
                 const response = await fetch("/api/scenarios");
                 if (!response.ok) throw new Error("Failed response from server");
+
                 const list = await response.json();
                 list.forEach(item => {
                     const opt = document.createElement("option");
@@ -163,31 +249,44 @@
                 showError("Failed to load available scenarios. Please ensure the local backend server is running.");
             }
 
-            // On selection change
             selectEl.addEventListener("change", async (e) => {
                 const id = e.target.value;
                 clearError();
+                resultSection.classList.add("hidden");
+
                 if (!id) {
                     detailsDiv.classList.add("hidden");
+                    customForm.classList.add("hidden");
                     runBtn.disabled = true;
                     return;
                 }
 
+                if (id === "custom") {
+                    detailsDiv.classList.add("hidden");
+                    customForm.classList.remove("hidden");
+                    runBtn.disabled = false;
+                    clearLoading();
+                    return;
+                }
+
+                customForm.classList.add("hidden");
                 showLoading("Loading scenario details…");
+
                 try {
                     const res = await fetch(`/api/scenarios/${id}`);
                     if (!res.ok) throw new Error("Failed to fetch scenario details");
-                    const scenario = await res.json();
-                    scenariosMap[id] = scenario;
 
-                    // Update UI fields
+                    const scenario = await res.json();
+
                     document.getElementById("scenario-desc").textContent = scenario.description;
                     document.getElementById("val-critical").textContent = scenario.demand.critical_load_kw;
                     document.getElementById("val-vessel").textContent = scenario.demand.vessel_load_kw;
+                    document.getElementById("val-other").textContent = scenario.demand.other_load_kw ?? 0;
                     document.getElementById("val-solar").textContent = scenario.supply.solar_kw;
                     document.getElementById("val-battery").textContent = scenario.supply.battery_charge_kwh;
                     document.getElementById("val-battery-max").textContent = scenario.supply.battery_max_kwh;
                     document.getElementById("val-grid").textContent = scenario.supply.grid_available ? "Online" : "Offline";
+                    document.getElementById("val-generator").textContent = scenario.supply.backup_generator_kw ?? 0;
 
                     detailsDiv.classList.remove("hidden");
                     runBtn.disabled = false;
@@ -201,7 +300,6 @@
                 }
             });
 
-            // Run evaluation
             runBtn.addEventListener("click", async () => {
                 const id = selectEl.value;
                 if (!id) return;
@@ -212,14 +310,29 @@
                 showLoading("Running two-agent evaluation workflow…");
 
                 try {
-                    const response = await fetch(`/api/evaluate/${id}`, { method: "POST" });
-                    if (!response.ok) throw new Error("Evaluation request failed");
+                    let response;
+
+                    if (id === "custom") {
+                        response = await fetch("/api/evaluate-custom", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify(getCustomPayload())
+                        });
+                    } else {
+                        response = await fetch(`/api/evaluate/${id}`, { method: "POST" });
+                    }
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.detail || "Evaluation request failed");
+                    }
+
                     const result = await response.json();
 
-                    // Render output
                     document.getElementById("eval-status").textContent = result.status.replace("_", " ").toUpperCase();
 
-                    // Style status banner
                     const banner = document.getElementById("eval-status-banner");
                     banner.className = "status-banner status-" + result.status;
 
@@ -232,7 +345,6 @@
                         document.getElementById("route-grid-port").textContent = rec.grid_draw_kw.toFixed(1);
                         document.getElementById("route-battery-port").textContent = rec.battery_draw_kw.toFixed(1);
                         document.getElementById("route-generator-port").textContent = rec.generator_draw_kw.toFixed(1);
-
                         document.getElementById("planner-rationale").textContent = rec.rationale;
                         document.getElementById("planner-alignment").textContent = rec.priority_alignment;
                     }
@@ -243,7 +355,6 @@
                         safeEl.textContent = safety.is_safe ? "PASSED" : "FAILED";
                         safeEl.className = safety.is_safe ? "safe-passed" : "safe-failed";
 
-                        // Violations list
                         const violationsUl = document.getElementById("safety-violations");
                         violationsUl.innerHTML = "";
                         if (safety.violations.length === 0) {
@@ -259,12 +370,11 @@
                             });
                         }
 
-                        // Warnings list
                         const warningsUl = document.getElementById("safety-warnings");
                         warningsUl.innerHTML = "";
 
-                        // Merge planner warnings and reviewer warnings
                         const allWarnings = [...(result.recommendation?.warnings || []), ...(safety.warnings || [])];
+
                         if (allWarnings.length === 0) {
                             const li = document.createElement("li");
                             li.textContent = "No warnings.";
@@ -282,7 +392,7 @@
                     resultSection.classList.remove("hidden");
                 } catch (err) {
                     console.error("Evaluation request failed:", err);
-                    showError("Failed to evaluate scenario. Ensure the backend endpoint is accessible and try again.");
+                    showError(err.message || "Failed to evaluate scenario.");
                     resultSection.classList.add("hidden");
                 } finally {
                     clearLoading();

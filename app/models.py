@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 
+
 class EnergySupplyState(BaseModel):
     solar_kw: float = Field(..., description="Available solar generation capacity in kW")
     battery_charge_kwh: float = Field(..., description="Current battery storage level in kWh")
@@ -8,10 +9,12 @@ class EnergySupplyState(BaseModel):
     grid_available: bool = Field(True, description="Indicates if utility grid power is online")
     backup_generator_kw: float = Field(0.0, description="Available backup generator capacity in kW")
 
+
 class EnergyDemandInput(BaseModel):
     critical_load_kw: float = Field(..., description="Minimum load required to maintain safe port operations in kW")
     vessel_load_kw: float = Field(..., description="Requested vessel shore power demand in kW")
     other_load_kw: float = Field(0.0, description="Non-critical auxiliary port load in kW")
+
 
 class Scenario(BaseModel):
     scenario_id: str = Field(..., description="Unique scenario identifier")
@@ -19,6 +22,7 @@ class Scenario(BaseModel):
     description: str = Field("", description="Context/disruption details")
     supply: EnergySupplyState = Field(..., description="Input supply capabilities")
     demand: EnergyDemandInput = Field(..., description="Input demand requirements")
+
 
 class PlannerRecommendation(BaseModel):
     grid_draw_kw: float = Field(0.0, description="Power to draw from the utility grid in kW")
@@ -30,10 +34,12 @@ class PlannerRecommendation(BaseModel):
     priority_alignment: str = Field(..., description="How this plan satisfies resilience > emissions > cost")
     warnings: List[str] = Field(default_factory=list, description="Any potential operational risks flagged by the planner")
 
+
 class SafetyReview(BaseModel):
     is_safe: bool = Field(..., description="True if recommendations do not violate physical boundaries or rates")
     violations: List[str] = Field(default_factory=list, description="List of physical boundary violations")
     warnings: List[str] = Field(default_factory=list, description="Non-blocking safety warnings or edge cases flagged")
+
 
 class EvaluationResult(BaseModel):
     scenario_id: str = Field(..., description="Associated scenario ID")
