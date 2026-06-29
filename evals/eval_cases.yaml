@@ -1,0 +1,166 @@
+metadata:
+  suite_name: naviclean_capstone_eval_suite
+  description: Scenario-based behavioral evaluation for the hybrid multi-agent port energy resilience assistant.
+  minimum_pass_rate: 0.8
+
+eval_cases:
+  - id: renewable_full_coverage
+    category: routing
+    scenario:
+      critical_load_kw: 20
+      vessel_load_kw: 10
+      other_load_kw: 0
+      solar_kw: 40
+      battery_charge_kwh: 80
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 50
+      backup_generator_kw: 60
+    expected:
+      reviewer_decision: approve
+      max_grid_import_kw_used: 0
+      max_generator_kw_used: 0
+      unmet_load_kw: 0
+
+  - id: grid_before_battery
+    category: routing
+    scenario:
+      critical_load_kw: 40
+      vessel_load_kw: 20
+      other_load_kw: 0
+      solar_kw: 10
+      battery_charge_kwh: 80
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 50
+      backup_generator_kw: 100
+    expected:
+      reviewer_decision: approve
+      battery_should_remain_idle_if_grid_suffices: true
+
+  - id: battery_before_generator
+    category: routing
+    scenario:
+      critical_load_kw: 50
+      vessel_load_kw: 30
+      other_load_kw: 0
+      solar_kw: 10
+      battery_charge_kwh: 80
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 30
+      backup_generator_kw: 80
+    expected:
+      reviewer_decision: approve
+      battery_used_before_generator: true
+
+  - id: generator_last_resort
+    category: routing
+    scenario:
+      critical_load_kw: 50
+      vessel_load_kw: 40
+      other_load_kw: 10
+      solar_kw: 5
+      battery_charge_kwh: 20
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 20
+      backup_generator_kw: 120
+    expected:
+      reviewer_decision: approve
+      generator_used_only_after_other_sources: true
+
+  - id: battery_charge_before_export
+    category: surplus
+    scenario:
+      critical_load_kw: 10
+      vessel_load_kw: 10
+      other_load_kw: 0
+      solar_kw: 50
+      battery_charge_kwh: 40
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 50
+      backup_generator_kw: 60
+    expected:
+      reviewer_decision: approve
+      battery_charges_before_export: true
+
+  - id: generator_below_threshold_rejected
+    category: constraints
+    scenario:
+      critical_load_kw: 30
+      vessel_load_kw: 20
+      other_load_kw: 0
+      solar_kw: 10
+      battery_charge_kwh: 80
+      battery_max_kwh: 100
+      grid_available: false
+      max_grid_import_kw: 0
+      backup_generator_kw: 100
+    expected:
+      reviewer_decision: revise
+      reason_contains: minimum operating threshold
+
+  - id: grid_cap_enforced
+    category: constraints
+    scenario:
+      critical_load_kw: 50
+      vessel_load_kw: 30
+      other_load_kw: 0
+      solar_kw: 5
+      battery_charge_kwh: 80
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 25
+      backup_generator_kw: 100
+    expected:
+      reviewer_decision: approve
+      grid_import_must_not_exceed_kw: 25
+
+  - id: escalate_when_critical_load_unmet
+    category: escalation
+    scenario:
+      critical_load_kw: 80
+      vessel_load_kw: 30
+      other_load_kw: 10
+      solar_kw: 0
+      battery_charge_kwh: 5
+      battery_max_kwh: 100
+      grid_available: false
+      max_grid_import_kw: 0
+      backup_generator_kw: 20
+    expected:
+      reviewer_decision: escalate
+      resilience_met: false
+
+  - id: custom_scenario_path
+    category: input
+    scenario:
+      critical_load_kw: 25
+      vessel_load_kw: 15
+      other_load_kw: 5
+      solar_kw: 20
+      battery_charge_kwh: 70
+      battery_max_kwh: 100
+      grid_available: true
+      max_grid_import_kw: 30
+      backup_generator_kw: 50
+    expected:
+      workflow_path: custom_input
+      reviewer_decision: approve
+
+  - id: low_endurance_flagged
+    category: guardrails
+    scenario:
+      critical_load_kw: 40
+      vessel_load_kw: 20
+      other_load_kw: 0
+      solar_kw: 0
+      battery_charge_kwh: 10
+      battery_max_kwh: 100
+      grid_available: false
+      max_grid_import_kw: 0
+      backup_generator_kw: 0
+    expected:
+      supervisor_review_flag: true

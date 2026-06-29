@@ -41,7 +41,8 @@
                     <div><strong>Battery Level:</strong> <span id="val-battery-pct">0</span>%</div>
                     <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
                     <div><strong>Max Grid Import:</strong> <span id="val-grid-max">0</span> kW</div>
-                    <div><strong>Backup Generator:</strong> <span id="val-generator">0</span> kW</div>
+                    <div><strong>Backup Generator Capacity:</strong> <span id="val-generator-capacity">0</span> kW</div>
+                    <div><strong>Backup Running:</strong> <span id="val-generator-running">0</span>%</div>
                 </div>
             </div>
 
@@ -93,8 +94,13 @@
                     </div>
 
                     <div class="control-group">
-                        <label for="custom-generator"><strong>Backup Generator (kW)</strong></label>
-                        <input id="custom-generator" type="number" min="0" step="0.1" value="0">
+                        <label for="custom-generator-capacity"><strong>Backup Generator Capacity (kW)</strong></label>
+                        <input id="custom-generator-capacity" type="number" min="0" step="0.1" value="0">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-generator-running"><strong>Backup Running (%)</strong></label>
+                        <input id="custom-generator-running" type="number" min="0" max="100" step="0.1" value="0">
                     </div>
                 </div>
 
@@ -150,18 +156,6 @@
                 </table>
             </div>
 
-            <div class="review-block">
-                <h3>Two-Agent Review Insights</h3>
-                <div class="insight-box">
-                    <h4>Planner Rationale</h4>
-                    <p id="planner-rationale">No plan proposed yet.</p>
-                    <p class="alignment-note">
-                        <strong>Priority Alignment:</strong>
-                        <span id="planner-alignment">N/A</span>
-                    </p>
-                </div>
-            </div>
-
             <div class="safety-block">
                 <h3>Safety & Constraints Check</h3>
                 <div class="insight-box">
@@ -181,6 +175,18 @@
                 <p id="note-planner-warnings" class="note-line"></p>
                 <p id="note-safety-actions" class="note-line"></p>
                 <p id="note-required-actions" class="note-line"></p>
+            </div>
+
+            <div class="review-block">
+                <h3>Two-Agent Review Insights</h3>
+                <div class="insight-box">
+                    <h4>Planner Rationale</h4>
+                    <p id="planner-rationale">No plan proposed yet.</p>
+                    <p class="alignment-note">
+                        <strong>Priority Alignment:</strong>
+                        <span id="planner-alignment">N/A</span>
+                    </p>
+                </div>
             </div>
         </section>
     </main>
@@ -208,7 +214,8 @@
             const customBatteryMax = document.getElementById("custom-battery-max");
             const customGrid = document.getElementById("custom-grid");
             const customGridMax = document.getElementById("custom-grid-max");
-            const customGenerator = document.getElementById("custom-generator");
+            const customGeneratorCapacity = document.getElementById("custom-generator-capacity");
+            const customGeneratorRunning = document.getElementById("custom-generator-running");
             const customDescription = document.getElementById("custom-description");
 
             function showLoading(msg) {
@@ -247,11 +254,34 @@
                     solar_kw: Number(customSolar.value),
                     battery_charge_kwh: batteryChargeKwh,
                     battery_max_kwh: batteryMaxKwh,
-                    backup_generator_kw: Number(customGenerator.value),
+                    backup_generator_capacity_kw: Number(customGeneratorCapacity.value),
+                    backup_running_percentage: Number(customGeneratorRunning.value),
                     grid_available: customGrid.value === "online",
                     max_grid_import_kw: Number(customGridMax.value),
                     description: customDescription.value.trim()
                 };
+            }
+
+            function extractErrorMessage(errData) {
+                if (typeof errData?.detail === "string") {
+                    return errData.detail;
+                }
+
+                if (Array.isArray(errData?.detail) && errData.detail.length > 0) {
+                    return errData.detail
+                        .map(item => {
+                            if (typeof item === "string") return item;
+                            if (item?.msg) return item.msg;
+                            return JSON.stringify(item);
+                        })
+                        .join("; ");
+                }
+
+                if (typeof errData === "string") {
+                    return errData;
+                }
+
+                return "Evaluation request failed";
             }
 
             function renderSafety(result) {
@@ -447,7 +477,10 @@
 
                 try {
                     const res = await fetch(`/api/scenarios/${id}`);
-                    if (!res.ok) throw new Error("Failed to fetch scenario details");
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => null);
+                        throw new Error(extractErrorMessage(errData));
+                    }
 
                     const scenario = await res.json();
                     const batteryPct = scenario.supply.battery_max_kwh > 0
@@ -462,7 +495,8 @@
                     document.getElementById("val-battery-pct").textContent = batteryPct.toFixed(1);
                     document.getElementById("val-grid").textContent = scenario.supply.grid_available ? "Online" : "Offline";
                     document.getElementById("val-grid-max").textContent = scenario.supply.max_grid_import_kw ?? 0;
-                    document.getElementById("val-generator").textContent = scenario.supply.backup_generator_kw ?? 0;
+                    document.getElementById("val-generator-capacity").textContent = scenario.supply.backup_generator_capacity_kw ?? 0;
+                    document.getElementById("val-generator-running").textContent = (scenario.supply.backup_running_percentage ?? 0).toFixed(1);
 
                     detailsDiv.classList.remove("hidden");
                     runBtn.disabled = false;
@@ -470,7 +504,7 @@
                 } catch (err) {
                     clearLoading();
                     console.error("Failed to fetch scenario details:", err);
-                    showError("Failed to load scenario details. Please check the network connection and try again.");
+                    showError(err.message || "Failed to load scenario details. Please check the network connection and try again.");
                     detailsDiv.classList.add("hidden");
                     runBtn.disabled = true;
                 }
@@ -499,8 +533,8 @@
                     }
 
                     if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.detail || "Evaluation request failed");
+                        const errData = await response.json().catch(() => null);
+                        throw new Error(extractErrorMessage(errData));
                     }
 
                     const result = await response.json();

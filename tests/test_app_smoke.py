@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+
 client = TestClient(app)
 
 
@@ -29,7 +30,8 @@ def test_evaluate_custom_valid():
         "battery_charge_kwh": 5,
         "battery_max_kwh": 100,
         "grid_available": False,
-        "backup_generator_kw": 20,
+        "backup_generator_capacity_kw": 20,
+        "backup_running_percentage": 30,
         "description": "Custom constrained scenario"
     }
     response = client.post("/api/evaluate-custom", json=payload)
@@ -49,8 +51,26 @@ def test_evaluate_custom_invalid_battery():
         "battery_charge_kwh": 120,
         "battery_max_kwh": 100,
         "grid_available": False,
-        "backup_generator_kw": 20,
+        "backup_generator_capacity_kw": 20,
+        "backup_running_percentage": 30,
         "description": "Invalid battery scenario"
+    }
+    response = client.post("/api/evaluate-custom", json=payload)
+    assert response.status_code == 422
+
+
+def test_evaluate_custom_invalid_backup_running_percentage():
+    payload = {
+        "critical_load_kw": 40,
+        "vessel_load_kw": 60,
+        "other_load_kw": 0,
+        "solar_kw": 10,
+        "battery_charge_kwh": 5,
+        "battery_max_kwh": 100,
+        "grid_available": False,
+        "backup_generator_capacity_kw": 20,
+        "backup_running_percentage": 20,
+        "description": "Invalid backup running percentage"
     }
     response = client.post("/api/evaluate-custom", json=payload)
     assert response.status_code == 422

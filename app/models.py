@@ -8,7 +8,14 @@ class EnergySupplyState(BaseModel):
     battery_max_kwh: float = Field(..., description="Total battery capacity in kWh")
     grid_available: bool = Field(True, description="Indicates if utility grid power is online")
     max_grid_import_kw: float = Field(50.0, description="Maximum allowed utility grid import in kW")
-    backup_generator_kw: float = Field(0.0, description="Available backup generator capacity in kW")
+    backup_generator_capacity_kw: float = Field(
+        0.0,
+        description="Rated backup generator capacity in kW"
+    )
+    backup_running_percentage: float = Field(
+        0.0,
+        description="Current backup generator operating percentage of rated capacity; 0 means off, otherwise must be at least 30"
+    )
 
 
 class EnergyDemandInput(BaseModel):

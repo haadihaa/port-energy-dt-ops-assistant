@@ -1,0 +1,50 @@
+environments:
+  default:
+    allow_recommendation_only: true
+    blocked_tools:
+      - execute_real_world_control
+      - send_email
+      - write_external_system
+  demo:
+    allow_recommendation_only: true
+    blocked_tools:
+      - execute_real_world_control
+      - write_external_system
+
+roles:
+  planner_agent:
+    allowed_tools:
+      - get_scenario_state
+      - explain_policy
+      - propose_deterministic_plan
+      - simulate_dispatch
+      - validate_constraints
+    requires_human_approval: false
+  reviewer_agent:
+    allowed_tools:
+      - validate_constraints
+      - simulate_dispatch
+      - explain_policy
+    requires_human_approval: false
+  operator:
+    allowed_tools:
+      - acknowledge_recommendation
+      - approve_escalation
+    requires_human_approval: true
+
+rules:
+  - id: no_automatic_execution
+    description: Plans are recommendations only and must not directly control physical systems.
+    enforcement: block
+  - id: hitl_required_for_execution
+    description: Any future execution-like action requires explicit human approval.
+    enforcement: require_human_approval
+  - id: deterministic_validation_required
+    description: A plan must pass deterministic validation before it can be approved.
+    enforcement: block_on_invalid
+  - id: reviewer_approval_required
+    description: A planner output cannot be shown as approved without reviewer confirmation.
+    enforcement: require_reviewer_approval
+  - id: low_endurance_flag
+    description: Low endurance scenarios require supervisor review.
+    enforcement: escalate_if_under_4_hours

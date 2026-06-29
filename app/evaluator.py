@@ -10,7 +10,9 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         or supply.battery_charge_kwh < 0
         or supply.battery_max_kwh <= 0
         or supply.max_grid_import_kw < 0
-        or supply.backup_generator_kw < 0
+        or supply.backup_generator_capacity_kw < 0
+        or supply.backup_running_percentage < 0
+        or supply.backup_running_percentage > 100
         or demand.critical_load_kw < 0
         or demand.vessel_load_kw < 0
         or demand.other_load_kw < 0
@@ -21,6 +23,15 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             resilience_met=False,
             estimated_endurance_hours=None,
             summary="Invalid or negative capacity/demand values provided in scenario inputs."
+        )
+
+    if 0 < supply.backup_running_percentage < 30:
+        return EvaluationResult(
+            scenario_id=scenario.scenario_id,
+            status="insufficient_information",
+            resilience_met=False,
+            estimated_endurance_hours=None,
+            summary="It is not operational for the backup generator to work under 30% of the rated generator size."
         )
 
     violations = []
@@ -76,9 +87,15 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             f"Total solar allocation ({total_solar_used:.1f} kW) exceeds available solar generation ({supply.solar_kw:.1f} kW)."
         )
 
-    if recommendation.generator_draw_kw > supply.backup_generator_kw:
+    if recommendation.generator_draw_kw > supply.backup_generator_capacity_kw:
         violations.append(
-            f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) exceeds backup capacity ({supply.backup_generator_kw:.1f} kW)."
+            f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) exceeds backup generator rated capacity ({supply.backup_generator_capacity_kw:.1f} kW)."
+        )
+
+    generator_min_kw = 0.3 * supply.backup_generator_capacity_kw if supply.backup_generator_capacity_kw > 0 else 0.0
+    if 0 < recommendation.generator_draw_kw < generator_min_kw:
+        violations.append(
+            f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) is below the 30% minimum operational level ({generator_min_kw:.1f} kW)."
         )
 
     estimated_endurance_hours = None

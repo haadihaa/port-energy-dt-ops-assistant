@@ -8,7 +8,9 @@
       "battery_charge_kwh": 40.0,
       "battery_max_kwh": 100.0,
       "grid_available": true,
-      "backup_generator_kw": 50.0
+      "max_grid_import_kw": 50.0,
+      "backup_generator_capacity_kw": 50.0,
+      "backup_running_percentage": 0.0
     },
     "demand": {
       "critical_load_kw": 30.0,
@@ -25,7 +27,9 @@
       "battery_charge_kwh": 60.0,
       "battery_max_kwh": 100.0,
       "grid_available": false,
-      "backup_generator_kw": 50.0
+      "max_grid_import_kw": 50.0,
+      "backup_generator_capacity_kw": 50.0,
+      "backup_running_percentage": 0.0
     },
     "demand": {
       "critical_load_kw": 35.0,
@@ -42,7 +46,9 @@
       "battery_charge_kwh": 5.0,
       "battery_max_kwh": 100.0,
       "grid_available": false,
-      "backup_generator_kw": 30.0
+      "max_grid_import_kw": 50.0,
+      "backup_generator_capacity_kw": 30.0,
+      "backup_running_percentage": 0.0
     },
     "demand": {
       "critical_load_kw": 40.0,
