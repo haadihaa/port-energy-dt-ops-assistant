@@ -35,7 +35,8 @@ class CustomScenarioRequest(BaseModel):
     battery_max_kwh: float
     grid_available: bool
     max_grid_import_kw: float = 50.0
-    backup_generator_kw: float = 0.0
+    backup_generator_capacity_kw: float = 0.0
+    backup_running_percentage: float = 0.0
     description: str = ""
 
     @model_validator(mode="after")
@@ -48,7 +49,8 @@ class CustomScenarioRequest(BaseModel):
             self.battery_charge_kwh,
             self.battery_max_kwh,
             self.max_grid_import_kw,
-            self.backup_generator_kw,
+            self.backup_generator_capacity_kw,
+            self.backup_running_percentage,
         ]
 
         if any(v < 0 for v in numeric_values):
@@ -59,6 +61,14 @@ class CustomScenarioRequest(BaseModel):
 
         if self.battery_charge_kwh > self.battery_max_kwh:
             raise ValueError("Battery level cannot exceed battery capacity.")
+
+        if self.backup_running_percentage > 100:
+            raise ValueError("Backup running percentage cannot exceed 100%.")
+
+        if 0 < self.backup_running_percentage < 30:
+            raise ValueError(
+                "It is not operational for the backup generator to work under 30% of the rated generator size."
+            )
 
         return self
 
@@ -145,7 +155,8 @@ def evaluate_custom_scenario(payload: CustomScenarioRequest):
                 "battery_max_kwh": payload.battery_max_kwh,
                 "grid_available": payload.grid_available,
                 "max_grid_import_kw": payload.max_grid_import_kw,
-                "backup_generator_kw": payload.backup_generator_kw,
+                "backup_generator_capacity_kw": payload.backup_generator_capacity_kw,
+                "backup_running_percentage": payload.backup_running_percentage,
             },
         )
         return run_agent_workflow(scenario)
