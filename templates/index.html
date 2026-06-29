@@ -11,10 +11,7 @@
 <body>
     <header class="app-header">
         <h1>Port Energy Digital Twin Ops Assistant</h1>
-        <p class="tagline">
-            A two-agent decision-support assistant prioritizing port operational resilience, clean energy
-            utilization, and grid cost management.
-        </p>
+        <p class="tagline">Supports predefined and custom disruption scenarios.</p>
     </header>
 
     <main class="app-container">
@@ -36,15 +33,15 @@
             <div id="scenario-details" class="scenario-details hidden">
                 <h3>Scenario Context</h3>
                 <p id="scenario-desc"></p>
-                <div class="metrics-grid">
+                <div class="metrics-grid scenario-metrics">
                     <div><strong>Critical Load:</strong> <span id="val-critical">0</span> kW</div>
                     <div><strong>Vessel Demand:</strong> <span id="val-vessel">0</span> kW</div>
-                    <div><strong>Solar Capacity:</strong> <span id="val-solar">0</span> kW</div>
-                    <div><strong>Battery Level:</strong> <span id="val-battery">0</span> kWh / <span
-                            id="val-battery-max">0</span> kWh</div>
-                    <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
-                    <div><strong>Backup Generator:</strong> <span id="val-generator">0</span> kW</div>
                     <div><strong>Other Load:</strong> <span id="val-other">0</span> kW</div>
+                    <div><strong>Solar Capacity:</strong> <span id="val-solar">0</span> kW</div>
+                    <div><strong>Battery Level:</strong> <span id="val-battery-pct">0</span>%</div>
+                    <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
+                    <div><strong>Max Grid Import:</strong> <span id="val-grid-max">0</span> kW</div>
+                    <div><strong>Backup Generator:</strong> <span id="val-generator">0</span> kW</div>
                 </div>
             </div>
 
@@ -54,12 +51,12 @@
                 <div class="metrics-grid">
                     <div class="control-group">
                         <label for="custom-critical"><strong>Critical Load (kW)</strong></label>
-                        <input id="custom-critical" type="number" min="0" step="0.1" value="10">
+                        <input id="custom-critical" type="number" min="0" step="0.1" value="40">
                     </div>
 
                     <div class="control-group">
                         <label for="custom-vessel"><strong>Vessel Demand (kW)</strong></label>
-                        <input id="custom-vessel" type="number" min="0" step="0.1" value="20">
+                        <input id="custom-vessel" type="number" min="0" step="0.1" value="60">
                     </div>
 
                     <div class="control-group">
@@ -69,12 +66,7 @@
 
                     <div class="control-group">
                         <label for="custom-solar"><strong>Solar Capacity (kW)</strong></label>
-                        <input id="custom-solar" type="number" min="0" step="0.1" value="15">
-                    </div>
-
-                    <div class="control-group">
-                        <label for="custom-battery"><strong>Battery Level (kWh)</strong></label>
-                        <input id="custom-battery" type="number" min="0" step="0.1" value="80">
+                        <input id="custom-solar" type="number" min="0" step="0.1" value="10">
                     </div>
 
                     <div class="control-group">
@@ -83,8 +75,8 @@
                     </div>
 
                     <div class="control-group">
-                        <label for="custom-generator"><strong>Backup Generator (kW)</strong></label>
-                        <input id="custom-generator" type="number" min="0" step="0.1" value="5">
+                        <label for="custom-battery"><strong>Battery Level (%)</strong></label>
+                        <input id="custom-battery" type="number" min="0" max="100" step="0.1" value="80">
                     </div>
 
                     <div class="control-group">
@@ -93,6 +85,16 @@
                             <option value="online">Online</option>
                             <option value="offline">Offline</option>
                         </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-grid-max"><strong>Max Grid Import (kW)</strong></label>
+                        <input id="custom-grid-max" type="number" min="0" step="0.1" value="50">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="custom-generator"><strong>Backup Generator (kW)</strong></label>
+                        <input id="custom-generator" type="number" min="0" step="0.1" value="0">
                     </div>
                 </div>
 
@@ -104,7 +106,7 @@
             </div>
 
             <button id="run-btn" class="btn btn-primary" disabled>Run Operator Evaluation</button>
-            <p id="loading-status"></p>
+            <p id="loading-status" class="loading-status"></p>
         </section>
 
         <section id="result-section" class="results-card hidden">
@@ -116,58 +118,47 @@
 
             <div id="supervisor-alert" class="supervisor-alert hidden">
                 <h3>Supervisor Attention Required</h3>
-                <p id="supervisor-alert-text">
-                    Estimated endurance is below the safe operating threshold. Immediate mitigation is required.
-                </p>
+                <p id="supervisor-alert-text"></p>
                 <ul id="supervisor-alert-actions" class="supervisor-alert-actions"></ul>
             </div>
 
-            <div class="results-layout">
-                <div class="routing-table-container">
-                    <h3>Proposed Energy Routing</h3>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Source Path</th>
-                                <th>Allocated Power (kW)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Solar to Port Load</td>
-                                <td id="route-solar-port">0.0</td>
-                            </tr>
-                            <tr>
-                                <td>Solar to Battery Charge</td>
-                                <td id="route-solar-battery">0.0</td>
-                            </tr>
-                            <tr>
-                                <td>Grid to Port Load</td>
-                                <td id="route-grid-port">0.0</td>
-                            </tr>
-                            <tr>
-                                <td>Battery to Port Load</td>
-                                <td id="route-battery-port">0.0</td>
-                            </tr>
-                            <tr>
-                                <td>Generator to Port Load</td>
-                                <td id="route-generator-port">0.0</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="routing-matrix">
+                <h3>Proposed Energy Routing</h3>
+                <table class="routing-grid-table">
+                    <thead>
+                        <tr>
+                            <th>Solar → Port</th>
+                            <th>Solar → Battery</th>
+                            <th>Grid → Port</th>
+                            <th>Grid → Battery</th>
+                            <th>Port → Grid</th>
+                            <th>Battery → Port</th>
+                            <th>Generator → Port</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td id="route-solar-port">0.0 kW</td>
+                            <td id="route-solar-battery">0.0 kW</td>
+                            <td id="route-grid-port">0.0 kW</td>
+                            <td id="route-grid-battery">0.0 kW</td>
+                            <td id="route-port-grid">0.0 kW</td>
+                            <td id="route-battery-port">0.0 kW</td>
+                            <td id="route-generator-port">0.0 kW</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-                <div class="review-details">
-                    <h3>Two-Agent Review Insights</h3>
-
-                    <div class="insight-box">
-                        <h4>Planner Rationale</h4>
-                        <p id="planner-rationale">No plan proposed yet.</p>
-                        <p class="alignment-note">
-                            <strong>Priority Alignment:</strong>
-                            <span id="planner-alignment">N/A</span>
-                        </p>
-                    </div>
+            <div class="review-block">
+                <h3>Two-Agent Review Insights</h3>
+                <div class="insight-box">
+                    <h4>Planner Rationale</h4>
+                    <p id="planner-rationale">No plan proposed yet.</p>
+                    <p class="alignment-note">
+                        <strong>Priority Alignment:</strong>
+                        <span id="planner-alignment">N/A</span>
+                    </p>
                 </div>
             </div>
 
@@ -215,8 +206,9 @@
             const customSolar = document.getElementById("custom-solar");
             const customBattery = document.getElementById("custom-battery");
             const customBatteryMax = document.getElementById("custom-battery-max");
-            const customGenerator = document.getElementById("custom-generator");
             const customGrid = document.getElementById("custom-grid");
+            const customGridMax = document.getElementById("custom-grid-max");
+            const customGenerator = document.getElementById("custom-generator");
             const customDescription = document.getElementById("custom-description");
 
             function showLoading(msg) {
@@ -237,16 +229,27 @@
                 errorBanner.classList.add("hidden");
             }
 
+            function syncBatteryToDefault() {
+                customBattery.value = "80.0";
+            }
+
+            customBatteryMax.addEventListener("change", syncBatteryToDefault);
+
             function getCustomPayload() {
+                const batteryMaxKwh = Number(customBatteryMax.value);
+                const batteryPct = Number(customBattery.value);
+                const batteryChargeKwh = batteryMaxKwh > 0 ? (batteryPct / 100) * batteryMaxKwh : 0;
+
                 return {
                     critical_load_kw: Number(customCritical.value),
                     vessel_load_kw: Number(customVessel.value),
                     other_load_kw: Number(customOther.value),
                     solar_kw: Number(customSolar.value),
-                    battery_charge_kwh: Number(customBattery.value),
-                    battery_max_kwh: Number(customBatteryMax.value),
+                    battery_charge_kwh: batteryChargeKwh,
+                    battery_max_kwh: batteryMaxKwh,
                     backup_generator_kw: Number(customGenerator.value),
                     grid_available: customGrid.value === "online",
+                    max_grid_import_kw: Number(customGridMax.value),
                     description: customDescription.value.trim()
                 };
             }
@@ -400,21 +403,23 @@
                 }
             }
 
-            try {
-                clearError();
-                const response = await fetch("/api/scenarios");
-                if (!response.ok) throw new Error("Failed response from server");
+            async function loadScenarios() {
+                try {
+                    clearError();
+                    const response = await fetch("/api/scenarios");
+                    if (!response.ok) throw new Error("Failed response from server");
 
-                const list = await response.json();
-                list.forEach(item => {
-                    const opt = document.createElement("option");
-                    opt.value = item.scenario_id;
-                    opt.textContent = item.name;
-                    selectEl.appendChild(opt);
-                });
-            } catch (err) {
-                console.error("Failed to load scenarios:", err);
-                showError("Failed to load available scenarios. Please ensure the local backend server is running.");
+                    const list = await response.json();
+                    list.forEach(item => {
+                        const opt = document.createElement("option");
+                        opt.value = item.scenario_id;
+                        opt.textContent = item.name;
+                        selectEl.appendChild(opt);
+                    });
+                } catch (err) {
+                    console.error("Failed to load scenarios:", err);
+                    showError("Failed to load available scenarios. Please ensure the local backend server is running.");
+                }
             }
 
             selectEl.addEventListener("change", async (e) => {
@@ -445,15 +450,18 @@
                     if (!res.ok) throw new Error("Failed to fetch scenario details");
 
                     const scenario = await res.json();
+                    const batteryPct = scenario.supply.battery_max_kwh > 0
+                        ? (scenario.supply.battery_charge_kwh / scenario.supply.battery_max_kwh) * 100
+                        : 0;
 
                     document.getElementById("scenario-desc").textContent = scenario.description;
                     document.getElementById("val-critical").textContent = scenario.demand.critical_load_kw;
                     document.getElementById("val-vessel").textContent = scenario.demand.vessel_load_kw;
                     document.getElementById("val-other").textContent = scenario.demand.other_load_kw ?? 0;
                     document.getElementById("val-solar").textContent = scenario.supply.solar_kw;
-                    document.getElementById("val-battery").textContent = scenario.supply.battery_charge_kwh;
-                    document.getElementById("val-battery-max").textContent = scenario.supply.battery_max_kwh;
+                    document.getElementById("val-battery-pct").textContent = batteryPct.toFixed(1);
                     document.getElementById("val-grid").textContent = scenario.supply.grid_available ? "Online" : "Offline";
+                    document.getElementById("val-grid-max").textContent = scenario.supply.max_grid_import_kw ?? 0;
                     document.getElementById("val-generator").textContent = scenario.supply.backup_generator_kw ?? 0;
 
                     detailsDiv.classList.remove("hidden");
@@ -505,19 +513,23 @@
 
                     if (result.recommendation) {
                         const rec = result.recommendation;
-                        document.getElementById("route-solar-port").textContent = rec.solar_draw_kw.toFixed(1);
-                        document.getElementById("route-solar-battery").textContent = rec.battery_charge_kw.toFixed(1);
-                        document.getElementById("route-grid-port").textContent = rec.grid_draw_kw.toFixed(1);
-                        document.getElementById("route-battery-port").textContent = rec.battery_draw_kw.toFixed(1);
-                        document.getElementById("route-generator-port").textContent = rec.generator_draw_kw.toFixed(1);
+                        document.getElementById("route-solar-port").textContent = `${rec.solar_draw_kw.toFixed(1)} kW`;
+                        document.getElementById("route-solar-battery").textContent = `${rec.battery_charge_kw.toFixed(1)} kW`;
+                        document.getElementById("route-grid-port").textContent = `${rec.grid_draw_kw.toFixed(1)} kW`;
+                        document.getElementById("route-grid-battery").textContent = `${(rec.grid_to_battery_kw || 0).toFixed(1)} kW`;
+                        document.getElementById("route-port-grid").textContent = `${(rec.grid_export_kw || 0).toFixed(1)} kW`;
+                        document.getElementById("route-battery-port").textContent = `${rec.battery_draw_kw.toFixed(1)} kW`;
+                        document.getElementById("route-generator-port").textContent = `${rec.generator_draw_kw.toFixed(1)} kW`;
                         document.getElementById("planner-rationale").textContent = rec.rationale;
                         document.getElementById("planner-alignment").textContent = rec.priority_alignment;
                     } else {
-                        document.getElementById("route-solar-port").textContent = "0.0";
-                        document.getElementById("route-solar-battery").textContent = "0.0";
-                        document.getElementById("route-grid-port").textContent = "0.0";
-                        document.getElementById("route-battery-port").textContent = "0.0";
-                        document.getElementById("route-generator-port").textContent = "0.0";
+                        document.getElementById("route-solar-port").textContent = "0.0 kW";
+                        document.getElementById("route-solar-battery").textContent = "0.0 kW";
+                        document.getElementById("route-grid-port").textContent = "0.0 kW";
+                        document.getElementById("route-grid-battery").textContent = "0.0 kW";
+                        document.getElementById("route-port-grid").textContent = "0.0 kW";
+                        document.getElementById("route-battery-port").textContent = "0.0 kW";
+                        document.getElementById("route-generator-port").textContent = "0.0 kW";
                         document.getElementById("planner-rationale").textContent = "No plan proposed yet.";
                         document.getElementById("planner-alignment").textContent = "N/A";
                     }
@@ -538,6 +550,8 @@
                     runBtn.disabled = false;
                 }
             });
+
+            loadScenarios();
         });
     </script>
 </body>

@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -7,6 +7,7 @@ class EnergySupplyState(BaseModel):
     battery_charge_kwh: float = Field(..., description="Current battery storage level in kWh")
     battery_max_kwh: float = Field(..., description="Total battery capacity in kWh")
     grid_available: bool = Field(True, description="Indicates if utility grid power is online")
+    max_grid_import_kw: float = Field(50.0, description="Maximum allowed utility grid import in kW")
     backup_generator_kw: float = Field(0.0, description="Available backup generator capacity in kW")
 
 
@@ -25,11 +26,13 @@ class Scenario(BaseModel):
 
 
 class PlannerRecommendation(BaseModel):
-    grid_draw_kw: float = Field(0.0, description="Power to draw from the utility grid in kW")
-    solar_draw_kw: float = Field(0.0, description="Power to draw directly from solar in kW")
-    battery_draw_kw: float = Field(0.0, description="Power to discharge from the battery in kW")
-    generator_draw_kw: float = Field(0.0, description="Power to draw from backup generator in kW")
-    battery_charge_kw: float = Field(0.0, description="Power allocated to charge the battery in kW")
+    grid_draw_kw: float = Field(0.0, description="Power to draw from the utility grid to the port in kW")
+    solar_draw_kw: float = Field(0.0, description="Power to draw directly from solar to the port in kW")
+    battery_draw_kw: float = Field(0.0, description="Power to discharge from the battery to the port in kW")
+    generator_draw_kw: float = Field(0.0, description="Power to draw from backup generator to the port in kW")
+    battery_charge_kw: float = Field(0.0, description="Power allocated from solar to charge the battery in kW")
+    grid_to_battery_kw: float = Field(0.0, description="Power allocated from the grid to charge the battery in kW")
+    grid_export_kw: float = Field(0.0, description="Power exported from the port back to the utility grid in kW")
     rationale: str = Field(..., description="Brief reasoning behind the routing plan")
     priority_alignment: str = Field(..., description="How this plan satisfies resilience > emissions > cost")
     warnings: List[str] = Field(default_factory=list, description="Any potential operational risks flagged by the planner")
@@ -43,11 +46,11 @@ class SafetyReview(BaseModel):
 
 class EvaluationResult(BaseModel):
     scenario_id: str = Field(..., description="Associated scenario ID")
-    status: str = Field(..., description="Overall evaluation status (e.g., success, unmet_critical_load, safety_failure, insufficient_information)")
+    status: str = Field(..., description="Overall evaluation status")
     recommendation: Optional[PlannerRecommendation] = Field(None, description="The evaluated routing plan, if available")
     safety_review: Optional[SafetyReview] = Field(None, description="The completed safety review, if available")
     resilience_met: bool = Field(False, description="True if critical load is fully satisfied")
-    renewable_fraction: float = Field(0.0, description="Estimated share of total powered load that came from solar (0.0 to 1.0)")
+    renewable_fraction: float = Field(0.0, description="Estimated share of total powered load that came from solar")
     estimated_endurance_hours: Optional[float] = Field(
         None,
         description="Estimated endurance in hours under the current routed operating condition"

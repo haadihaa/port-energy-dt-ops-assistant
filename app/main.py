@@ -17,12 +17,10 @@ app = FastAPI(
     version="0.1.0"
 )
 
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCENARIOS_FILE = os.path.join(BASE_DIR, "data", "sample_scenarios.json")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -36,6 +34,7 @@ class CustomScenarioRequest(BaseModel):
     battery_charge_kwh: float
     battery_max_kwh: float
     grid_available: bool
+    max_grid_import_kw: float = 50.0
     backup_generator_kw: float = 0.0
     description: str = ""
 
@@ -48,6 +47,7 @@ class CustomScenarioRequest(BaseModel):
             self.solar_kw,
             self.battery_charge_kwh,
             self.battery_max_kwh,
+            self.max_grid_import_kw,
             self.backup_generator_kw,
         ]
 
@@ -144,6 +144,7 @@ def evaluate_custom_scenario(payload: CustomScenarioRequest):
                 "battery_charge_kwh": payload.battery_charge_kwh,
                 "battery_max_kwh": payload.battery_max_kwh,
                 "grid_available": payload.grid_available,
+                "max_grid_import_kw": payload.max_grid_import_kw,
                 "backup_generator_kw": payload.backup_generator_kw,
             },
         )
