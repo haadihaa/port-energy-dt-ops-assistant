@@ -11,6 +11,8 @@ Port Energy Digital Twin Ops Assistant is a local-first, two-agent decision-supp
 - Estimated endurance display for the evaluated operating condition.
 - Supervisor escalation when endurance falls below the critical threshold.
 - Clear operator-facing outputs for routing, rationale, warnings, and required actions.
+- Battery input shown as a percentage.
+- Direction-aware routing display with import, charging, discharge, and export flows.
 
 ## Workflow
 
@@ -26,6 +28,21 @@ The evaluation can return results such as:
 - `safety_failure`
 - `insufficient_information`
 
+## Routing Logic
+
+The planner follows a resilience-first routing policy:
+
+1. Use renewable energy directly first.
+2. If demand remains, use grid import next when available.
+3. Then use battery discharge.
+4. Use backup generation last.
+
+When there is surplus energy:
+
+1. Keep backup generation off.
+2. Charge the battery toward the 80% operating target when possible.
+3. Export any remaining surplus to the grid when the grid is available.
+
 ## What the App Shows
 
 For each scenario, the interface presents:
@@ -37,6 +54,33 @@ For each scenario, the interface presents:
 - safety and constraints review,
 - operational notes,
 - estimated endurance.
+
+The routing display is direction-aware and can show flows such as:
+
+- Solar → Port
+- Solar → Battery
+- Grid → Port
+- Grid → Battery
+- Port → Grid
+- Battery → Port
+- Generator → Port
+
+## Custom Scenario Inputs
+
+The custom scenario form allows operators to define:
+
+- critical load,
+- vessel demand,
+- other load,
+- solar capacity,
+- battery capacity,
+- battery level as a percentage,
+- grid availability,
+- maximum grid import,
+- backup generator capacity,
+- optional scenario notes.
+
+Battery level is entered in percentage terms in the UI, while the backend converts it into stored energy using the configured battery capacity. The default operating target is 80% of battery capacity.
 
 ## Run Locally
 
@@ -71,9 +115,27 @@ http://127.0.0.1:8000
 uv run pytest
 ```
 
+## Project Structure
+
+A simplified project structure:
+
+```text
+app/
+  evaluator.py
+  main.py
+  models.py
+  policies.py
+static/
+  style.css
+templates/
+  index.html
+tests/
+  ...
+```
+
 ## Notes
 
-This is a practical MVP focused on structured agent behavior and explainable operational decision support. The current version uses simplified assumptions for endurance and backup generation, so it should be understood as a prototype rather than a production control system.
+This is a practical MVP focused on structured agent behavior and explainable operational decision support. The current version uses simplified assumptions for endurance, battery charging, and backup generation behavior, so it should be understood as a prototype rather than a production control system.
 
 ## Author
 
