@@ -1,8 +1,11 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 class EnergySupplyState(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     solar_kw: float = Field(..., description="Available solar generation capacity in kW")
     battery_charge_kwh: float = Field(..., description="Current battery storage level in kWh")
     battery_max_kwh: float = Field(..., description="Total battery capacity in kWh")
@@ -10,18 +13,82 @@ class EnergySupplyState(BaseModel):
     max_grid_import_kw: float = Field(50.0, description="Maximum allowed utility grid import in kW")
     backup_generator_capacity_kw: float = Field(
         0.0,
-        description="Rated backup generator capacity in kW"
+        validation_alias=AliasChoices("backup_generator_capacity_kw", "backup_generator_kw"),
+        description="Rated backup generator capacity in kW",
     )
     backup_running_percentage: float = Field(
         0.0,
-        description="Current backup generator operating percentage of rated capacity; 0 means off, otherwise must be at least 30"
+        description="Current generator running level as a percentage of rated capacity",
     )
+
+    @property
+    def backup_generator_kw(self) -> float:
+        return self.backup_generator_capacity_kw
+
+    @property
+    def generator_min_operating_kw(self) -> float:
+        if self.backup_generator_capacity_kw <= 0:
+            return 0.0
+        return 0.3 * self.backup_generator_capacity_kw
+
+    @property
+    def generator_running_kw(self) -> float:
+        if self.backup_generator_capacity_kw <= 0 or self.backup_running_percentage <= 0:
+            return 0.0
+        return (self.backup_generator_capacity_kw * self.backup_running_percentage) / 100.0
+
+    @model_validator(mode="after")
+    def validate_values(self):
+        numeric_values = [
+            self.solar_kw,
+            self.battery_charge_kwh,
+            self.battery_max_kwh,
+            self.max_grid_import_kw,
+            self.backup_generator_capacity_kw,
+            self.backup_running_percentage,
+        ]
+
+        if any(v < 0 for v in numeric_values):
+            raise ValueError("All supply values must be greater than or equal to 0.")
+
+        if self.battery_max_kwh <= 0:
+            raise ValueError("Battery capacity must be greater than 0.")
+
+        if self.battery_charge_kwh > self.battery_max_kwh:
+            raise ValueError("Battery level cannot exceed battery capacity.")
+
+        if self.backup_running_percentage > 100:
+            raise ValueError("Backup generator running percentage must be between 0 and 100.")
+
+        if (
+            self.backup_running_percentage > 0
+            and self.backup_running_percentage < 30
+            and self.backup_generator_capacity_kw > 0
+        ):
+            raise ValueError(
+                "Backup generator running percentage must be 0 or at least 30 when the generator is in use."
+            )
+
+        return self
 
 
 class EnergyDemandInput(BaseModel):
     critical_load_kw: float = Field(..., description="Minimum load required to maintain safe port operations in kW")
     vessel_load_kw: float = Field(..., description="Requested vessel shore power demand in kW")
     other_load_kw: float = Field(0.0, description="Non-critical auxiliary port load in kW")
+
+    @model_validator(mode="after")
+    def validate_values(self):
+        numeric_values = [
+            self.critical_load_kw,
+            self.vessel_load_kw,
+            self.other_load_kw,
+        ]
+
+        if any(v < 0 for v in numeric_values):
+            raise ValueError("All demand values must be greater than or equal to 0.")
+
+        return self
 
 
 class Scenario(BaseModel):
@@ -60,6 +127,10 @@ class EvaluationResult(BaseModel):
     renewable_fraction: float = Field(0.0, description="Estimated share of total powered load that came from solar")
     estimated_endurance_hours: Optional[float] = Field(
         None,
-        description="Estimated endurance in hours under the current routed operating condition"
+        description="Estimated endurance in hours under the recommended routed operating condition",
+    )
+    estimated_endurance_without_generator_hours: Optional[float] = Field(
+        None,
+        description="Estimated endurance in hours if the backup generator is not used",
     )
     summary: str = Field(..., description="Brief outcome summary of the scenario evaluation")

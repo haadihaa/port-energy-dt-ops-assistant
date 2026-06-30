@@ -363,6 +363,18 @@ textarea {
     display: none !important;
 }
 
+.status-supervisor_action_required {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.55);
+    color: #fbbf24;
+}
+
+.status-emergency_action_required {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.55);
+    color: #f87171;
+}
+
 @media (max-width: 860px) {
     body {
         padding: 14px;

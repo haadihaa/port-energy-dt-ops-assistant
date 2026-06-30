@@ -1,24 +1,25 @@
-from app.models import Scenario, PlannerRecommendation
+from app.models import PlannerRecommendation, Scenario
+
+
+ENDURANCE_ESCALATION_HOURS = 4.0
+
+
+def _generator_capacity_kw(supply) -> float:
+    return max(
+        0.0,
+        getattr(supply, "backup_generator_capacity_kw", getattr(supply, "backup_generator_kw", 0.0)),
+    )
+
+
+def _generator_min_operating_kw(supply) -> float:
+    return max(0.0, getattr(supply, "generator_min_operating_kw", 0.3 * _generator_capacity_kw(supply)))
+
+
+def _generator_running_percentage(supply) -> float:
+    return max(0.0, getattr(supply, "backup_running_percentage", 0.0))
 
 
 def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
-    """
-    Routing logic:
-    1. Satisfy total port demand.
-    2. Use renewable energy directly first.
-    3. If there is a remaining deficit: Grid -> Backup Generator -> Battery.
-    4. If there is a surplus after serving demand:
-       - keep generator off,
-       - charge battery toward the 80% target,
-       - export the remainder to the grid.
-    5. If renewable < total demand but renewable + allowed grid import can exceed demand,
-       use remaining grid headroom to charge battery toward the 80% target before generator use.
-    6. Backup generator model:
-       - rated by backup_generator_capacity_kw,
-       - current operating point provided by backup_running_percentage,
-       - if generator is used, it cannot run below 30% of rated capacity,
-       - if minimum backup output would oversupply demand, cut the difference from grid import first.
-    """
     supply = scenario.supply
     demand = scenario.demand
 
@@ -38,18 +39,12 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
     solar_available = max(0.0, supply.solar_kw)
     battery_available_kwh = max(0.0, supply.battery_charge_kwh)
     grid_limit_kw = max(0.0, supply.max_grid_import_kw) if supply.grid_available else 0.0
-
-    generator_capacity_kw = max(0.0, supply.backup_generator_capacity_kw)
-    generator_running_pct = max(0.0, supply.backup_running_percentage)
-    generator_min_kw = 0.3 * generator_capacity_kw if generator_capacity_kw > 0 else 0.0
+    generator_available_kw = _generator_capacity_kw(supply)
+    generator_min_operating_kw = _generator_min_operating_kw(supply)
+    generator_running_percentage = _generator_running_percentage(supply)
 
     if not supply.grid_available:
         warnings.append("Utility grid is offline. Operating in islanded resilience mode.")
-
-    if generator_running_pct > 0:
-        warnings.append(
-            f"Backup generator is currently operating at {generator_running_pct:.1f}% of rated capacity."
-        )
 
     solar_to_port = min(solar_available, total_demand)
     solar_available -= solar_to_port
@@ -62,10 +57,15 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
     remaining_grid_headroom = max(0.0, grid_limit_kw - grid_to_port) if supply.grid_available else 0.0
     battery_room_to_target = max(0.0, target_battery_kwh - supply.battery_charge_kwh)
 
-    if solar_available > 0 and battery_room_to_target > 0:
+    if remaining_demand <= 0 and solar_available > 0 and battery_room_to_target > 0:
         solar_to_battery = min(solar_available, battery_room_to_target)
         solar_available -= solar_to_battery
         battery_room_to_target -= solar_to_battery
+
+    if remaining_demand <= 0 and remaining_grid_headroom > 0 and battery_room_to_target > 0:
+        grid_to_battery = min(remaining_grid_headroom, battery_room_to_target)
+        remaining_grid_headroom -= grid_to_battery
+        battery_room_to_target -= grid_to_battery
 
     if remaining_demand <= 0 and solar_available > 0:
         if supply.grid_available:
@@ -75,39 +75,66 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
                 f"Surplus renewable energy of {solar_available:.1f} kW cannot be exported because the grid is offline."
             )
 
-    if remaining_demand > 0 and remaining_grid_headroom > 0 and battery_room_to_target > 0:
-        grid_to_battery = min(remaining_grid_headroom, battery_room_to_target)
-        remaining_grid_headroom -= grid_to_battery
-        battery_room_to_target -= grid_to_battery
+    if remaining_demand > 0 and generator_available_kw > 0:
+        projected_battery_draw_kw = min(remaining_demand, battery_available_kwh)
+        projected_endurance_hours = None
 
-    if remaining_demand > 0 and generator_capacity_kw > 0:
-        if remaining_demand < generator_min_kw:
-            grid_reduction_needed = generator_min_kw - remaining_demand
+        if projected_battery_draw_kw > 0:
+            projected_endurance_hours = battery_available_kwh / projected_battery_draw_kw
 
-            if grid_to_port > 0:
-                grid_reduction = min(grid_to_port, grid_reduction_needed)
-                grid_to_port -= grid_reduction
-                remaining_demand += grid_reduction
-                grid_reduction_needed -= grid_reduction
+        should_preserve_battery = (
+            projected_endurance_hours is not None
+            and projected_endurance_hours < ENDURANCE_ESCALATION_HOURS
+        )
 
-            generator_to_port = min(generator_min_kw, generator_capacity_kw)
-            remaining_demand -= generator_to_port
+        if should_preserve_battery:
+            proposed_generator_kw = min(remaining_demand, generator_available_kw)
 
-            if remaining_demand < 0:
-                remaining_demand = 0.0
+            if proposed_generator_kw >= generator_min_operating_kw:
+                generator_to_port = proposed_generator_kw
+                remaining_demand -= generator_to_port
 
-            if grid_reduction_needed > 0:
+                if abs(generator_to_port - generator_available_kw) < 1e-9:
+                    warnings.append(
+                        f"Backup generator should run at 100% of available capacity ({generator_to_port:.1f} kW) "
+                        "to preserve battery endurance."
+                    )
+                else:
+                    pct = (generator_to_port / generator_available_kw) * 100 if generator_available_kw > 0 else 0
+                    warnings.append(
+                        f"Backup generator should run at {pct:.0f}% of available capacity "
+                        f"({generator_to_port:.1f} kW) to preserve battery endurance."
+                    )
+            else:
                 warnings.append(
-                    "Backup generator minimum loading required reducing grid import to maintain feasible dispatch."
+                    "Backup generator was not dispatched because the required output "
+                    f"({proposed_generator_kw:.1f} kW) is below the minimum stable operating threshold "
+                    f"({generator_min_operating_kw:.1f} kW)."
                 )
-        else:
-            generator_to_port = min(remaining_demand, generator_capacity_kw)
-            remaining_demand -= generator_to_port
 
     if remaining_demand > 0:
         battery_to_port = min(remaining_demand, battery_available_kwh)
         remaining_demand -= battery_to_port
         battery_available_kwh -= battery_to_port
+
+    if remaining_demand > 0 and generator_available_kw > generator_to_port:
+        additional_generator_headroom = generator_available_kw - generator_to_port
+        proposed_generator_kw = min(remaining_demand, additional_generator_headroom)
+
+        if generator_to_port == 0 and proposed_generator_kw < generator_min_operating_kw:
+            warnings.append(
+                "Backup generator was not dispatched because the required output "
+                f"({proposed_generator_kw:.1f} kW) is below the minimum stable operating threshold "
+                f"({generator_min_operating_kw:.1f} kW)."
+            )
+        elif proposed_generator_kw > 0:
+            generator_to_port += proposed_generator_kw
+            remaining_demand -= proposed_generator_kw
+
+    if generator_running_percentage > 0 and generator_to_port == 0:
+        warnings.append(
+            "Backup generator is currently running but is not required by the recommended plan; operator should shut it down."
+        )
 
     total_served = solar_to_port + grid_to_port + battery_to_port + generator_to_port
     unmet_total_load = max(0.0, total_demand - total_served)
@@ -119,35 +146,37 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
     if critical_deficit > 0:
         warnings.append(f"CRITICAL LOAD UNMET: Deficit of {critical_deficit:.1f} kW.")
 
-    if generator_to_port > 0 and generator_to_port < generator_min_kw:
-        warnings.append(
-            "Backup generator dispatch is below the 30% minimum operational threshold."
-        )
-
-    if total_served >= total_demand and grid_export_kw > 0 and (solar_to_battery > 0 or grid_to_battery > 0):
+    if generator_to_port > 0 and battery_to_port > 0:
         rationale = (
-            "Served all demand using direct renewable energy first, kept backup generation off when not needed, "
+            "Served demand using solar and grid first, then dispatched the backup generator to protect battery endurance, "
+            "with the battery covering only the remaining residual load."
+        )
+    elif generator_to_port > 0:
+        rationale = (
+            "Served demand using solar and grid first, then dispatched the backup generator to preserve resilience and avoid unnecessary battery depletion."
+        )
+    elif total_served >= total_demand and grid_export_kw > 0 and (solar_to_battery > 0 or grid_to_battery > 0):
+        rationale = (
+            "Served all demand using direct renewable energy first, kept backup generation off, "
             "charged the battery toward the 80% target, and exported the remaining surplus to the grid."
         )
     elif total_served >= total_demand and grid_export_kw > 0:
         rationale = (
-            "Served all demand using direct renewable energy first, kept backup generation off when not needed, "
+            "Served all demand using direct renewable energy first, kept backup generation off, "
             "and exported the remaining surplus to the grid."
         )
     elif total_served >= total_demand and (solar_to_battery > 0 or grid_to_battery > 0):
-        rationale = (
-            "Served all demand first, then charged the battery toward the 80% operating target."
-        )
+        rationale = "Served all demand first, then charged the battery toward the 80% operating target."
     else:
         rationale = (
             "Attempted to satisfy demand using renewable energy first, then grid import, "
-            "then backup generation, and finally battery discharge as the last reserve."
+            "then battery discharge, then backup generation as a last resort."
         )
 
     priority_alignment = (
         "Resilience first by serving demand as far as possible; renewable energy is used directly before other sources; "
-        "grid import is used before backup generation when available; backup generation is used before battery discharge "
-        "to preserve stored energy; battery is restored toward the 80% operating target when possible."
+        "generator support is enabled before deep battery depletion when endurance would fall below the escalation threshold; "
+        "battery is preserved for sustained operations and restored toward the 80% operating target when possible."
     )
 
     return PlannerRecommendation(
@@ -160,5 +189,5 @@ def compute_routing_policy(scenario: Scenario) -> PlannerRecommendation:
         grid_export_kw=grid_export_kw,
         rationale=rationale,
         priority_alignment=priority_alignment,
-        warnings=warnings
+        warnings=warnings,
     )

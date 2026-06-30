@@ -9,7 +9,7 @@
       "battery_max_kwh": 100.0,
       "grid_available": true,
       "max_grid_import_kw": 50.0,
-      "backup_generator_capacity_kw": 50.0,
+      "backup_generator_kw": 50.0,
       "backup_running_percentage": 0.0
     },
     "demand": {
@@ -28,7 +28,7 @@
       "battery_max_kwh": 100.0,
       "grid_available": false,
       "max_grid_import_kw": 50.0,
-      "backup_generator_capacity_kw": 50.0,
+      "backup_generator_kw": 50.0,
       "backup_running_percentage": 0.0
     },
     "demand": {
@@ -47,13 +47,32 @@
       "battery_max_kwh": 100.0,
       "grid_available": false,
       "max_grid_import_kw": 50.0,
-      "backup_generator_capacity_kw": 30.0,
+      "backup_generator_kw": 30.0,
       "backup_running_percentage": 0.0
     },
     "demand": {
       "critical_load_kw": 40.0,
       "vessel_load_kw": 60.0,
       "other_load_kw": 15.0
+    }
+  },
+  {
+    "scenario_id": "emergency_grid_failure_04",
+    "name": "Emergency Grid Failure, High Vessel Demand",
+    "description": "Utility grid is unavailable during a high-demand vessel call. Solar is weak, battery reserves are limited, and backup generation is insufficient for full support.",
+    "supply": {
+      "solar_kw": 5.0,
+      "battery_charge_kwh": 20.0,
+      "battery_max_kwh": 100.0,
+      "grid_available": false,
+      "max_grid_import_kw": 0.0,
+      "backup_generator_kw": 10.0,
+      "backup_running_percentage": 0.0
+    },
+    "demand": {
+      "critical_load_kw": 35.0,
+      "vessel_load_kw": 70.0,
+      "other_load_kw": 10.0
     }
   }
 ]

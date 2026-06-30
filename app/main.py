@@ -1,21 +1,17 @@
-import os
 import json
-from typing import List, Dict
+import os
+from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, model_validator
+from fastapi.templating import Jinja2Templates
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
-from app.models import Scenario, EvaluationResult
 from app.agents import run_agent_workflow
+from app.models import EvaluationResult, Scenario
 
 
-app = FastAPI(
-    title="Port Energy Digital Twin Ops Assistant",
-    description="A local-first, two-agent decision-support prototype for small-port energy operations.",
-    version="0.1.0"
-)
+app = FastAPI(title="Port Energy Digital Twin Ops Assistant")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCENARIOS_FILE = os.path.join(BASE_DIR, "data", "sample_scenarios.json")
@@ -35,9 +31,16 @@ class CustomScenarioRequest(BaseModel):
     battery_max_kwh: float
     grid_available: bool
     max_grid_import_kw: float = 50.0
-    backup_generator_capacity_kw: float = 0.0
+    backup_generator_capacity_kw: float = Field(
+        20.0,
+        validation_alias=AliasChoices("backup_generator_capacity_kw", "backup_generator_kw"),
+    )
     backup_running_percentage: float = 0.0
     description: str = ""
+
+    @property
+    def backup_generator_kw(self) -> float:
+        return self.backup_generator_capacity_kw
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -63,11 +66,15 @@ class CustomScenarioRequest(BaseModel):
             raise ValueError("Battery level cannot exceed battery capacity.")
 
         if self.backup_running_percentage > 100:
-            raise ValueError("Backup running percentage cannot exceed 100%.")
+            raise ValueError("Backup generator running percentage must be between 0 and 100.")
 
-        if 0 < self.backup_running_percentage < 30:
+        if (
+            self.backup_running_percentage > 0
+            and self.backup_running_percentage < 30
+            and self.backup_generator_capacity_kw > 0
+        ):
             raise ValueError(
-                "It is not operational for the backup generator to work under 30% of the rated generator size."
+                "Backup generator running percentage must be 0 or at least 30 when the generator is in use."
             )
 
         return self
@@ -75,7 +82,7 @@ class CustomScenarioRequest(BaseModel):
 
 def load_scenarios() -> Dict[str, Scenario]:
     try:
-        with open(SCENARIOS_FILE, "r") as f:
+        with open(SCENARIOS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             return {item["scenario_id"]: Scenario(**item) for item in data}
     except Exception as e:
@@ -87,7 +94,6 @@ scenarios_db = load_scenarios()
 
 @app.get("/")
 def read_root(request: Request):
-    """Renders the dashboard operator console."""
     try:
         return templates.TemplateResponse(request, "index.html", {"request": request})
     except TypeError:
@@ -96,18 +102,16 @@ def read_root(request: Request):
 
 @app.get("/health")
 def health_check():
-    """Simple status check endpoint."""
     return {"status": "healthy", "service": "port-energy-ops-assistant"}
 
 
 @app.get("/api/scenarios")
 def list_scenarios() -> List[Dict[str, str]]:
-    """Lists available scenarios with ID, name, and description."""
     return [
         {
             "scenario_id": s.scenario_id,
             "name": s.name,
-            "description": s.description
+            "description": s.description,
         }
         for s in scenarios_db.values()
     ]
@@ -115,7 +119,6 @@ def list_scenarios() -> List[Dict[str, str]]:
 
 @app.get("/api/scenarios/{scenario_id}", response_model=Scenario)
 def get_scenario(scenario_id: str):
-    """Retrieves a single scenario by ID."""
     scenario = scenarios_db.get(scenario_id)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -124,21 +127,18 @@ def get_scenario(scenario_id: str):
 
 @app.post("/api/evaluate/{scenario_id}", response_model=EvaluationResult)
 def evaluate_scenario_endpoint(scenario_id: str):
-    """Runs the two-agent planning and safety evaluation workflow on a scenario."""
     scenario = scenarios_db.get(scenario_id)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     try:
-        result = run_agent_workflow(scenario)
-        return result
+        return run_agent_workflow(scenario)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
 
 
 @app.post("/api/evaluate-custom", response_model=EvaluationResult)
 def evaluate_custom_scenario(payload: CustomScenarioRequest):
-    """Runs the same two-agent workflow on a user-defined scenario."""
     try:
         scenario = Scenario(
             scenario_id="custom",
@@ -161,6 +161,6 @@ def evaluate_custom_scenario(payload: CustomScenarioRequest):
         )
         return run_agent_workflow(scenario)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")

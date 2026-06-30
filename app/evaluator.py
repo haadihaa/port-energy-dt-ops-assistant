@@ -10,9 +10,7 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         or supply.battery_charge_kwh < 0
         or supply.battery_max_kwh <= 0
         or supply.max_grid_import_kw < 0
-        or supply.backup_generator_capacity_kw < 0
-        or supply.backup_running_percentage < 0
-        or supply.backup_running_percentage > 100
+        or supply.backup_generator_kw < 0
         or demand.critical_load_kw < 0
         or demand.vessel_load_kw < 0
         or demand.other_load_kw < 0
@@ -22,16 +20,8 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             status="insufficient_information",
             resilience_met=False,
             estimated_endurance_hours=None,
+            estimated_endurance_without_generator_hours=None,
             summary="Invalid or negative capacity/demand values provided in scenario inputs."
-        )
-
-    if 0 < supply.backup_running_percentage < 30:
-        return EvaluationResult(
-            scenario_id=scenario.scenario_id,
-            status="insufficient_information",
-            resilience_met=False,
-            estimated_endurance_hours=None,
-            summary="It is not operational for the backup generator to work under 30% of the rated generator size."
         )
 
     violations = []
@@ -87,25 +77,49 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             f"Total solar allocation ({total_solar_used:.1f} kW) exceeds available solar generation ({supply.solar_kw:.1f} kW)."
         )
 
-    if recommendation.generator_draw_kw > supply.backup_generator_capacity_kw:
+    if recommendation.generator_draw_kw > supply.backup_generator_kw:
         violations.append(
-            f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) exceeds backup generator rated capacity ({supply.backup_generator_capacity_kw:.1f} kW)."
-        )
-
-    generator_min_kw = 0.3 * supply.backup_generator_capacity_kw if supply.backup_generator_capacity_kw > 0 else 0.0
-    if 0 < recommendation.generator_draw_kw < generator_min_kw:
-        violations.append(
-            f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) is below the 30% minimum operational level ({generator_min_kw:.1f} kW)."
+            f"Generator draw ({recommendation.generator_draw_kw:.1f} kW) exceeds backup capacity ({supply.backup_generator_kw:.1f} kW)."
         )
 
     estimated_endurance_hours = None
     if recommendation.battery_draw_kw > 0:
         estimated_endurance_hours = supply.battery_charge_kwh / recommendation.battery_draw_kw
 
-    if estimated_endurance_hours is not None and estimated_endurance_hours < 4:
-        warnings.append("Low endurance reserve: supervisor review required.")
+    total_demand_kw = demand.critical_load_kw + demand.vessel_load_kw + demand.other_load_kw
+    support_without_generator_kw = recommendation.solar_draw_kw + recommendation.grid_draw_kw
+    battery_only_required_kw = max(0.0, total_demand_kw - support_without_generator_kw)
+
+    estimated_endurance_without_generator_hours = None
+    if battery_only_required_kw > 0:
+        estimated_endurance_without_generator_hours = supply.battery_charge_kwh / battery_only_required_kw
+
+    supervisor_required = False
+    emergency_required = False
+
+    if estimated_endurance_hours is not None and estimated_endurance_hours < 8:
+        supervisor_required = True
         warnings.append(
-            "Recommended actions: reduce vessel demand and/or activate backup generation to prevent service failure."
+            "Supervisor action required: estimated endurance under the recommended plan is below 8.0 hours."
+        )
+        warnings.append(
+            "Required action: cut vessel demand; if endurance remains unsafe, also cut critical load."
+        )
+
+    if (
+        (estimated_endurance_hours is not None and estimated_endurance_hours < 2)
+        or (
+            estimated_endurance_without_generator_hours is not None
+            and estimated_endurance_without_generator_hours < 2
+        )
+    ):
+        supervisor_required = True
+        emergency_required = True
+        warnings.append(
+            "Emergency supervisor action required: estimated endurance is below 2.0 hours."
+        )
+        warnings.append(
+            "Required action: immediately cut vessel demand and critical load to prevent service collapse."
         )
 
     is_safe = len(violations) == 0
@@ -123,6 +137,7 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             safety_review=safety_review,
             resilience_met=False,
             estimated_endurance_hours=estimated_endurance_hours,
+            estimated_endurance_without_generator_hours=estimated_endurance_without_generator_hours,
             summary="Proposed routing plan failed physical feasibility checks."
         )
 
@@ -133,9 +148,7 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         + recommendation.generator_draw_kw
     )
 
-    total_demand_kw = demand.critical_load_kw + demand.vessel_load_kw + demand.other_load_kw
     unmet_total_load_kw = max(0.0, total_demand_kw - total_power_routed)
-
     resilience_met = total_power_routed >= demand.critical_load_kw
 
     renewable_fraction = 0.0
@@ -148,6 +161,12 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
             "Physical limits satisfied but failed to serve critical load. "
             f"Deficit: {demand.critical_load_kw - total_power_routed:.1f} kW."
         )
+    elif emergency_required:
+        status = "emergency_action_required"
+        summary = "Energy routing plan is feasible, but endurance is critically low and emergency supervisor intervention is required."
+    elif supervisor_required:
+        status = "supervisor_action_required"
+        summary = "Energy routing plan is feasible, but endurance is below the supervisor threshold and demand reduction is required."
     elif unmet_total_load_kw > 0:
         status = "success"
         summary = (
@@ -159,11 +178,17 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         summary = "Energy routing plan satisfies total operational demand within safe physical boundaries."
 
     if estimated_endurance_hours is not None:
-        summary += f" Estimated endurance: {estimated_endurance_hours:.1f} hours."
+        summary += f" Estimated endurance under recommended plan: {estimated_endurance_hours:.1f} hours."
     elif recommendation.grid_draw_kw > 0 and supply.grid_available:
         summary += " Estimated endurance: continuous while utility grid remains available."
     else:
         summary += " Estimated endurance: not available under current modeling assumptions."
+
+    if estimated_endurance_without_generator_hours is not None:
+        summary += (
+            f" If backup generator does not turn on, estimated endurance is "
+            f"{estimated_endurance_without_generator_hours:.1f} hours."
+        )
 
     if recommendation.warnings:
         summary += f" Planner warnings: {'; '.join(recommendation.warnings)}"
@@ -179,5 +204,6 @@ def evaluate_scenario(scenario: Scenario, recommendation: PlannerRecommendation)
         resilience_met=resilience_met,
         renewable_fraction=renewable_fraction,
         estimated_endurance_hours=estimated_endurance_hours,
+        estimated_endurance_without_generator_hours=estimated_endurance_without_generator_hours,
         summary=summary
     )

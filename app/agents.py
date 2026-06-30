@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
+from app.evaluator import evaluate_scenario
 from app.models import EvaluationResult, PlannerRecommendation, Scenario
 from app.tools.policy_tools import explain_policy, propose_deterministic_plan, recommendation_to_dict
 from app.tools.scenario_tools import get_scenario_state
@@ -47,14 +48,37 @@ class OperationsPlannerAgent:
             plan_id=f"plan-{scenario.scenario_id}-v1",
             scenario_id=scenario.scenario_id,
             actions=[
-                PlannerAction(source="renewables", power_kw=recommendation.solar_draw_kw, status="on" if recommendation.solar_draw_kw > 0 else "idle"),
-                PlannerAction(source="grid", power_kw=recommendation.grid_draw_kw + recommendation.grid_to_battery_kw, status="charge" if recommendation.grid_to_battery_kw > 0 else ("on" if recommendation.grid_draw_kw > 0 else "off")),
-                PlannerAction(source="battery", power_kw=recommendation.battery_draw_kw + recommendation.battery_charge_kw, status="discharge" if recommendation.battery_draw_kw > 0 else ("charge" if recommendation.battery_charge_kw > 0 else "idle")),
-                PlannerAction(source="generator", power_kw=recommendation.generator_draw_kw, status="on" if recommendation.generator_draw_kw > 0 else "off"),
+                PlannerAction(
+                    source="renewables",
+                    power_kw=recommendation.solar_draw_kw,
+                    status="on" if recommendation.solar_draw_kw > 0 else "idle",
+                ),
+                PlannerAction(
+                    source="grid",
+                    power_kw=recommendation.grid_draw_kw + recommendation.grid_to_battery_kw,
+                    status="charge"
+                    if recommendation.grid_to_battery_kw > 0
+                    else ("on" if recommendation.grid_draw_kw > 0 else "off"),
+                ),
+                PlannerAction(
+                    source="battery",
+                    power_kw=recommendation.battery_draw_kw + recommendation.battery_charge_kw,
+                    status="discharge"
+                    if recommendation.battery_draw_kw > 0
+                    else ("charge" if recommendation.battery_charge_kw > 0 else "idle"),
+                ),
+                PlannerAction(
+                    source="generator",
+                    power_kw=recommendation.generator_draw_kw,
+                    status="on" if recommendation.generator_draw_kw > 0 else "off",
+                ),
             ],
             expected_outcomes={
                 "critical_load_served_kw": min(scenario.demand.critical_load_kw, simulation["served_load_kw"]),
-                "vessel_load_served_kw": max(0.0, min(scenario.demand.vessel_load_kw, simulation["served_load_kw"] - scenario.demand.critical_load_kw)),
+                "vessel_load_served_kw": max(
+                    0.0,
+                    min(scenario.demand.vessel_load_kw, simulation["served_load_kw"] - scenario.demand.critical_load_kw),
+                ),
                 "unmet_load_kw": simulation["unmet_load_kw"],
                 "battery_soc_end_pct": scenario_state["supply"]["battery_soc_pct"],
                 "generator_output_kw": simulation["generator_output_kw"],
@@ -94,6 +118,7 @@ class SafetyReviewerAgent:
     ) -> Dict[str, Any]:
         validation = validate_constraints(scenario, recommendation)
         simulation = simulate_dispatch(scenario, recommendation)
+        evaluated = evaluate_scenario(scenario, recommendation)
 
         issues: List[str] = []
         policy_flags: List[str] = []
@@ -128,12 +153,14 @@ class SafetyReviewerAgent:
 
         final_result = EvaluationResult(
             scenario_id=scenario.scenario_id,
-            status=validation["status"],
+            status=evaluated.status,
             recommendation=recommendation,
-            resilience_met=validation["resilience_met"],
-            renewable_fraction=simulation.get("renewable_fraction") or 0.0,
-            estimated_endurance_hours=validation["estimated_endurance_hours"],
-            summary=validation["summary"],
+            safety_review=evaluated.safety_review,
+            resilience_met=evaluated.resilience_met,
+            renewable_fraction=evaluated.renewable_fraction,
+            estimated_endurance_hours=evaluated.estimated_endurance_hours,
+            estimated_endurance_without_generator_hours=evaluated.estimated_endurance_without_generator_hours,
+            summary=evaluated.summary,
         )
 
         return {

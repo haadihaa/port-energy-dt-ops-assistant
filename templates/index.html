@@ -38,6 +38,7 @@
                     <div><strong>Vessel Demand:</strong> <span id="val-vessel">0</span> kW</div>
                     <div><strong>Other Load:</strong> <span id="val-other">0</span> kW</div>
                     <div><strong>Solar Capacity:</strong> <span id="val-solar">0</span> kW</div>
+                    <div><strong>Battery Capacity:</strong> <span id="val-battery-max">0</span> kWh</div>
                     <div><strong>Battery Level:</strong> <span id="val-battery-pct">0</span>%</div>
                     <div><strong>Grid Status:</strong> <span id="val-grid">Online</span></div>
                     <div><strong>Max Grid Import:</strong> <span id="val-grid-max">0</span> kW</div>
@@ -95,7 +96,7 @@
 
                     <div class="control-group">
                         <label for="custom-generator-capacity"><strong>Backup Generator Capacity (kW)</strong></label>
-                        <input id="custom-generator-capacity" type="number" min="0" step="0.1" value="0">
+                        <input id="custom-generator-capacity" type="number" min="0" step="0.1" value="20">
                     </div>
 
                     <div class="control-group">
@@ -123,7 +124,7 @@
             </div>
 
             <div id="supervisor-alert" class="supervisor-alert hidden">
-                <h3>Supervisor Attention Required</h3>
+                <h3 id="supervisor-alert-title">Supervisor Attention Required</h3>
                 <p id="supervisor-alert-text"></p>
                 <ul id="supervisor-alert-actions" class="supervisor-alert-actions"></ul>
             </div>
@@ -172,7 +173,7 @@
             <div id="operational-notes" class="operational-notes hidden">
                 <h3>Operational Notes</h3>
                 <p id="note-endurance" class="note-line"></p>
-                <p id="note-planner-warnings" class="note-line"></p>
+                <p id="note-endurance-no-backup" class="note-line"></p>
                 <p id="note-safety-actions" class="note-line"></p>
                 <p id="note-required-actions" class="note-line"></p>
             </div>
@@ -263,48 +264,61 @@
             }
 
             function extractErrorMessage(errData) {
-                if (typeof errData?.detail === "string") {
-                    return errData.detail;
-                }
-
+                if (typeof errData?.detail === "string") return errData.detail;
                 if (Array.isArray(errData?.detail) && errData.detail.length > 0) {
-                    return errData.detail
-                        .map(item => {
-                            if (typeof item === "string") return item;
-                            if (item?.msg) return item.msg;
-                            return JSON.stringify(item);
-                        })
-                        .join("; ");
+                    return errData.detail.map(item => {
+                        if (typeof item === "string") return item;
+                        if (item?.msg) return item.msg;
+                        return JSON.stringify(item);
+                    }).join("; ");
                 }
-
-                if (typeof errData === "string") {
-                    return errData;
-                }
-
+                if (typeof errData === "string") return errData;
                 return "Evaluation request failed";
             }
 
+            function appendListItems(listEl, items, emptyText, emptyClass = "list-muted") {
+                listEl.innerHTML = "";
+                if (!items || items.length === 0) {
+                    const li = document.createElement("li");
+                    li.textContent = emptyText;
+                    li.className = emptyClass;
+                    listEl.appendChild(li);
+                    return;
+                }
+                items.forEach(item => {
+                    const li = document.createElement("li");
+                    li.textContent = item;
+                    listEl.appendChild(li);
+                });
+            }
+
             function renderSafety(result) {
-                const safety = result.safety_review;
+                const safety = result.safety_review || result.safety || null;
                 const safeEl = document.getElementById("safety-safe");
                 const violationsUl = document.getElementById("safety-violations");
                 const warningsUl = document.getElementById("safety-warnings");
 
-                violationsUl.innerHTML = "";
-                warningsUl.innerHTML = "";
-
                 if (!safety) {
-                    safeEl.textContent = "N/A";
-                    safeEl.className = "";
+                    safeEl.textContent = "NOT RETURNED";
+                    safeEl.className = "safe-warning";
+                    appendListItems(violationsUl, [], "No safety review was returned by the backend.", "list-muted");
+                    appendListItems(warningsUl, result.recommendation?.warnings || [], "No warnings.", "list-muted");
                     return;
                 }
 
+                const violations = Array.isArray(safety.violations) ? safety.violations : [];
                 const allWarnings = [
                     ...(result.recommendation?.warnings || []),
-                    ...(safety.warnings || [])
+                    ...(Array.isArray(safety.warnings) ? safety.warnings : [])
                 ];
 
-                if (!safety.is_safe) {
+                if (result.status === "emergency_action_required") {
+                    safeEl.textContent = "EMERGENCY ACTION REQUIRED";
+                    safeEl.className = "safe-failed";
+                } else if (result.status === "supervisor_action_required") {
+                    safeEl.textContent = "SUPERVISOR ACTION REQUIRED";
+                    safeEl.className = "safe-warning";
+                } else if (safety.is_safe === false || result.status === "safety_failure") {
                     safeEl.textContent = "FAILED";
                     safeEl.className = "safe-failed";
                 } else if (allWarnings.length > 0) {
@@ -315,64 +329,45 @@
                     safeEl.className = "safe-passed";
                 }
 
-                if (safety.violations.length === 0) {
-                    const li = document.createElement("li");
-                    li.textContent = "No safety violations.";
-                    li.className = "list-success";
-                    violationsUl.appendChild(li);
-                } else {
-                    safety.violations.forEach(v => {
-                        const li = document.createElement("li");
-                        li.textContent = v;
-                        violationsUl.appendChild(li);
-                    });
-                }
-
-                if (allWarnings.length === 0) {
-                    const li = document.createElement("li");
-                    li.textContent = "No warnings.";
-                    li.className = "list-muted";
-                    warningsUl.appendChild(li);
-                } else {
-                    allWarnings.forEach(w => {
-                        const li = document.createElement("li");
-                        li.textContent = w;
-                        warningsUl.appendChild(li);
-                    });
-                }
+                appendListItems(violationsUl, violations, "No safety violations.", "list-success");
+                appendListItems(warningsUl, allWarnings, "No warnings.", "list-muted");
             }
 
             function renderOperationalNotes(result) {
                 const notesBox = document.getElementById("operational-notes");
                 const noteEndurance = document.getElementById("note-endurance");
-                const notePlannerWarnings = document.getElementById("note-planner-warnings");
+                const noteEnduranceNoBackup = document.getElementById("note-endurance-no-backup");
                 const noteSafetyActions = document.getElementById("note-safety-actions");
                 const noteRequiredActions = document.getElementById("note-required-actions");
 
                 noteEndurance.textContent = "";
-                notePlannerWarnings.textContent = "";
+                noteEnduranceNoBackup.textContent = "";
                 noteSafetyActions.textContent = "";
                 noteRequiredActions.textContent = "";
 
                 if (result.estimated_endurance_hours !== null && result.estimated_endurance_hours !== undefined) {
-                    noteEndurance.textContent = `Estimated endurance: ${result.estimated_endurance_hours.toFixed(1)} hours.`;
+                    noteEndurance.textContent = `Estimated endurance under recommended plan: ${result.estimated_endurance_hours.toFixed(1)} hours.`;
                 } else if (result.recommendation && result.recommendation.grid_draw_kw > 0) {
                     noteEndurance.textContent = "Estimated endurance: Continuous while utility grid remains available.";
                 } else {
                     noteEndurance.textContent = "Estimated endurance: Not available under current modeling assumptions.";
                 }
 
-                const plannerWarnings = result.recommendation?.warnings || [];
-                if (plannerWarnings.length > 0) {
-                    notePlannerWarnings.textContent = `Planner warnings: ${plannerWarnings.join(" ")}`;
+                if (
+                    result.estimated_endurance_without_generator_hours !== null &&
+                    result.estimated_endurance_without_generator_hours !== undefined
+                ) {
+                    noteEnduranceNoBackup.textContent =
+                        `If backup generator does not turn on, estimated endurance is ${result.estimated_endurance_without_generator_hours.toFixed(1)} hours.`;
                 }
 
-                const safetyWarnings = result.safety_review?.warnings || [];
+                const safetyWarnings = result.safety_review?.warnings || result.safety?.warnings || [];
                 const supervisorWarnings = safetyWarnings.filter(w =>
-                    w.toLowerCase().includes("supervisor") || w.toLowerCase().includes("low endurance")
+                    w.toLowerCase().includes("supervisor action required") ||
+                    w.toLowerCase().includes("emergency supervisor action required")
                 );
                 const requiredActions = safetyWarnings.filter(w =>
-                    w.toLowerCase().includes("recommended actions") || w.toLowerCase().includes("required actions")
+                    w.toLowerCase().includes("required action:")
                 );
 
                 if (supervisorWarnings.length > 0) {
@@ -385,7 +380,7 @@
 
                 const hasAnyNotes =
                     noteEndurance.textContent ||
-                    notePlannerWarnings.textContent ||
+                    noteEnduranceNoBackup.textContent ||
                     noteSafetyActions.textContent ||
                     noteRequiredActions.textContent;
 
@@ -394,43 +389,62 @@
 
             function renderSupervisorAlert(result) {
                 const alertBox = document.getElementById("supervisor-alert");
+                const alertTitle = document.getElementById("supervisor-alert-title");
                 const alertText = document.getElementById("supervisor-alert-text");
                 const alertActions = document.getElementById("supervisor-alert-actions");
 
                 alertActions.innerHTML = "";
 
                 const endurance = result.estimated_endurance_hours;
-                const safetyWarnings = result.safety_review?.warnings || [];
-                const requiredActions = safetyWarnings.filter(w =>
-                    w.toLowerCase().includes("recommended actions") || w.toLowerCase().includes("required actions")
-                );
+                const enduranceNoBackup = result.estimated_endurance_without_generator_hours;
 
-                if (endurance !== null && endurance !== undefined && endurance < 4) {
+                const under8 = endurance !== null && endurance !== undefined && endurance < 8;
+                const under2 =
+                    (endurance !== null && endurance !== undefined && endurance < 2) ||
+                    (enduranceNoBackup !== null && enduranceNoBackup !== undefined && enduranceNoBackup < 2);
+
+                if (under2) {
+                    alertTitle.textContent = "Emergency Action Required";
                     alertText.textContent =
-                        `Estimated endurance is ${endurance.toFixed(1)} hours, which is below the 4.0-hour escalation threshold. Immediate mitigation is required.`;
+                        `Emergency escalation: endurance is below 2.0 hours (${endurance !== null && endurance !== undefined ? endurance.toFixed(1) : "N/A"} h with current plan, ${enduranceNoBackup !== null && enduranceNoBackup !== undefined ? enduranceNoBackup.toFixed(1) : "N/A"} h without backup). Supervisor must cut demand immediately.`;
 
-                    if (requiredActions.length > 0) {
-                        requiredActions.forEach(action => {
-                            const li = document.createElement("li");
-                            li.textContent = action;
-                            alertActions.appendChild(li);
-                        });
-                    } else {
-                        [
-                            "Reduce vessel demand.",
-                            "Activate backup generation if available.",
-                            "Reduce non-critical load to preserve resilience."
-                        ].forEach(action => {
-                            const li = document.createElement("li");
-                            li.textContent = action;
-                            alertActions.appendChild(li);
-                        });
-                    }
+                    [
+                        "Immediately cut vessel demand.",
+                        "If risk remains, cut critical load as directed by supervisor.",
+                        "Keep backup generation at maximum safe available output.",
+                        "Reduce any non-essential load immediately."
+                    ].forEach(action => {
+                        const li = document.createElement("li");
+                        li.textContent = action;
+                        alertActions.appendChild(li);
+                    });
 
                     alertBox.classList.remove("hidden");
-                } else {
-                    alertBox.classList.add("hidden");
+                    return;
                 }
+
+                if (under8) {
+                    alertTitle.textContent = "Supervisor Attention Required";
+                    alertText.textContent =
+                        `Supervisor escalation: endurance under the recommended plan is ${endurance.toFixed(1)} hours, below the 8.0-hour threshold. Demand must be reduced.`;
+
+                    [
+                        "Cut vessel demand first.",
+                        "If endurance is still not acceptable, cut critical load under supervisor direction.",
+                        "Keep backup generation enabled at maximum available safe capacity.",
+                        "Review load-priority sequence immediately."
+                    ].forEach(action => {
+                        const li = document.createElement("li");
+                        li.textContent = action;
+                        alertActions.appendChild(li);
+                    });
+
+                    alertBox.classList.remove("hidden");
+                    return;
+                }
+
+                alertTitle.textContent = "Supervisor Attention Required";
+                alertBox.classList.add("hidden");
             }
 
             async function loadScenarios() {
@@ -493,10 +507,13 @@
                     document.getElementById("val-other").textContent = scenario.demand.other_load_kw ?? 0;
                     document.getElementById("val-solar").textContent = scenario.supply.solar_kw;
                     document.getElementById("val-battery-pct").textContent = batteryPct.toFixed(1);
+                    document.getElementById("val-battery-max").textContent = scenario.supply.battery_max_kwh ?? 0;
                     document.getElementById("val-grid").textContent = scenario.supply.grid_available ? "Online" : "Offline";
                     document.getElementById("val-grid-max").textContent = scenario.supply.max_grid_import_kw ?? 0;
-                    document.getElementById("val-generator-capacity").textContent = scenario.supply.backup_generator_capacity_kw ?? 0;
-                    document.getElementById("val-generator-running").textContent = (scenario.supply.backup_running_percentage ?? 0).toFixed(1);
+                    document.getElementById("val-generator-capacity").textContent =
+                        (scenario.supply.backup_generator_capacity_kw ?? scenario.supply.backup_generator_kw ?? 0);
+                    document.getElementById("val-generator-running").textContent =
+                        (scenario.supply.backup_running_percentage ?? 0).toFixed(1);
 
                     detailsDiv.classList.remove("hidden");
                     runBtn.disabled = false;
