@@ -4,14 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Port Energy Digital Twin Ops Assistant</title>
+    <title>Port Energy Multi-Agent Operations Assistant</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
     <header class="app-header">
-        <h1>Port Energy Digital Twin Ops Assistant</h1>
-        <p class="tagline">Supports predefined and custom disruption scenarios.</p>
+        <h1>Port Energy Multi-Agent Operations Assistant</h1>
+        <p class="tagline">Supports predefined and custom disruption scenarios for business continuity decision support.
+        </p>
+        <p class="tagline">Multi-agent workflow: Coordinator, Operations Planner, Safety Reviewer, and Evaluation Agent.
+        </p>
     </header>
 
     <main class="app-container">
@@ -112,7 +115,7 @@
                 </div>
             </div>
 
-            <button id="run-btn" class="btn btn-primary" disabled>Run Operator Evaluation</button>
+            <button id="run-btn" class="btn btn-primary" disabled>Run Multi-Agent Evaluation</button>
             <p id="loading-status" class="loading-status"></p>
         </section>
 
@@ -179,7 +182,7 @@
             </div>
 
             <div class="review-block">
-                <h3>Two-Agent Review Insights</h3>
+                <h3>Multi-Agent Review Insights</h3>
                 <div class="insight-box">
                     <h4>Planner Rationale</h4>
                     <p id="planner-rationale">No plan proposed yet.</p>
@@ -189,11 +192,22 @@
                     </p>
                 </div>
             </div>
+
+            <div class="review-block">
+                <h3>Agent Workflow</h3>
+                <div class="insight-box">
+                    <p><strong>Coordinator:</strong> <span id="agent-coordinator">N/A</span></p>
+                    <p><strong>Sub-agents:</strong> <span id="agent-subagents">N/A</span></p>
+                    <p><strong>Planner agent:</strong> <span id="agent-planner-name">N/A</span></p>
+                    <p><strong>Safety reviewer:</strong> <span id="agent-safety-name">N/A</span></p>
+                    <p><strong>Evaluation agent:</strong> <span id="agent-eval-name">N/A</span></p>
+                </div>
+            </div>
         </section>
     </main>
 
     <footer class="app-footer">
-        <p>Designed and developed by Mohammad Hadi Hamednia | Port Energy Digital Twin Ops Assistant</p>
+        <p>Designed and developed by Mohammad Hadi Hamednia | Port Energy Multi-Agent Operations Assistant</p>
     </footer>
 
     <script>
@@ -290,6 +304,34 @@
                     li.textContent = item;
                     listEl.appendChild(li);
                 });
+            }
+
+            function normalizeResult(rawResult) {
+                if (rawResult && rawResult.final_result) {
+                    return {
+                        result: rawResult.final_result,
+                        trace: rawResult.agent_trace || {},
+                        architecture: rawResult.agent_architecture || {}
+                    };
+                }
+                return {
+                    result: rawResult,
+                    trace: {},
+                    architecture: {}
+                };
+            }
+
+            function renderAgentWorkflow(trace, architecture) {
+                document.getElementById("agent-coordinator").textContent =
+                    architecture.coordinator || "N/A";
+                document.getElementById("agent-subagents").textContent =
+                    Array.isArray(architecture.sub_agents) ? architecture.sub_agents.join(", ") : "N/A";
+                document.getElementById("agent-planner-name").textContent =
+                    trace.planner?.agent_name || "N/A";
+                document.getElementById("agent-safety-name").textContent =
+                    trace.safety_reviewer?.agent_name || "N/A";
+                document.getElementById("agent-eval-name").textContent =
+                    trace.evaluation_agent?.agent_name || "N/A";
             }
 
             function renderSafety(result) {
@@ -534,19 +576,19 @@
                 clearError();
                 runBtn.textContent = "Evaluating...";
                 runBtn.disabled = true;
-                showLoading("Running two-agent evaluation workflow...");
+                showLoading("Running multi-agent evaluation workflow...");
 
                 try {
                     let response;
 
                     if (id === "custom") {
-                        response = await fetch("/api/evaluate-custom", {
+                        response = await fetch("/api/agents/evaluate-custom", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(getCustomPayload())
                         });
                     } else {
-                        response = await fetch(`/api/evaluate/${id}`, { method: "POST" });
+                        response = await fetch(`/api/agents/evaluate/${id}`, { method: "POST" });
                     }
 
                     if (!response.ok) {
@@ -554,7 +596,9 @@
                         throw new Error(extractErrorMessage(errData));
                     }
 
-                    const result = await response.json();
+                    const rawResult = await response.json();
+                    const normalized = normalizeResult(rawResult);
+                    const result = normalized.result;
 
                     document.getElementById("eval-status").textContent =
                         result.status.replaceAll("_", " ").toUpperCase();
@@ -588,6 +632,7 @@
                     renderSafety(result);
                     renderSupervisorAlert(result);
                     renderOperationalNotes(result);
+                    renderAgentWorkflow(normalized.trace, normalized.architecture);
 
                     resultSection.classList.remove("hidden");
                     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -597,7 +642,7 @@
                     resultSection.classList.add("hidden");
                 } finally {
                     clearLoading();
-                    runBtn.textContent = "Run Operator Evaluation";
+                    runBtn.textContent = "Run Multi-Agent Evaluation";
                     runBtn.disabled = false;
                 }
             });
