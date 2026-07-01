@@ -1,86 +1,83 @@
-# Port Energy Digital Twin Ops Assistant
+# Port Energy Multi-Agent Operations Assistant
 
-Port Energy Digital Twin Ops Assistant is a local-first, two-agent decision-support prototype for small-port energy operations under disruption scenarios. It helps operators evaluate how available energy sources should be routed to maintain critical operations while respecting operational constraints and prioritizing resilience first, then cleaner energy use, then cost.
+A multi-agent decision-support system for business continuity during port energy disruption scenarios.
+
+This project combines a FastAPI application with an agent orchestration layer to assess disruptions, generate routing plans, enforce safety guardrails, and evaluate operational recommendations. It is designed as an independent Agents for Business project.
+
+## Problem
+
+Ports rely on stable energy availability to maintain critical operations, vessel support, and safe routing decisions. During disruptions, operators need fast, structured guidance on how to allocate available energy sources while maintaining resilience and avoiding unsafe operating conditions.
+
+Traditional dashboards can display data, but they do not coordinate reasoning across planning, safety review, and decision evaluation. This project explores how an agent-based system can support that workflow. 
+
+## Solution
+
+The system accepts predefined or custom disruption scenarios and produces an operator-facing recommendation that includes:
+- operational status,
+- routing recommendation,
+- rationale,
+- safety review,
+- warnings,
+- escalation conditions,
+- estimated endurance.
+
+The application keeps deterministic operational logic while adding an agent layer that separates planning, safety oversight, and evaluation responsibilities.
+
+## Agent Architecture
+
+The project uses a multi-agent architecture with four roles:
+
+- **Coordinator Agent**: Orchestrates the workflow and combines outputs.
+- **Operations Planner Agent**: Proposes an energy-routing plan using resilience-first logic.
+- **Safety Reviewer Agent**: Validates the plan against operational and safety constraints.
+- **Evaluation Agent**: Assesses decision quality, consistency, and scenario outcomes.
+
+## Tools
+
+The agents use structured tools from the application layer:
+- scenario tools,
+- simulation tools,
+- policy tools,
+- guardrail and escalation logic,
+- evaluation cases.
+
+## Course Concepts Demonstrated
+
+This capstone demonstrates multiple concepts from the 5-Day AI Agents course:
+
+1. **Multi-agent orchestration** through specialized agents with distinct responsibilities.
+2. **Tool use and interoperability** by connecting agents to scenario, policy, and simulation tools.
+3. **Guardrails and safety oversight** through policy enforcement and supervisor escalation.
+4. **Evaluation workflows** using scenario-based evaluation cases and testable outputs.
 
 ## Features
 
-- Two-agent evaluation workflow.
-- Supports predefined and custom disruption scenarios.
-- Resilience-first routing logic.
-- Safety and feasibility validation of proposed routing plans.
-- Estimated endurance display for the evaluated operating condition.
-- Supervisor escalation when endurance falls below the critical threshold.
-- Clear operator-facing outputs for routing, rationale, warnings, and required actions.
-- Battery input shown as a percentage.
-- Direction-aware routing display with import, charging, discharge, and export flows.
+- Predefined and custom disruption scenarios.
+- Resilience-first energy-routing logic.
+- Safety and feasibility validation.
+- Operator-facing rationale and warnings.
+- Supervisor escalation when endurance drops below threshold.
+- Evaluation-ready scenario cases.
+- FastAPI web interface and API endpoints.
 
-## Workflow
+## Project Structure
 
-The system uses two roles:
-
-- **Operations Planner Agent** proposes an energy-routing plan.
-- **Safety Reviewer Agent** validates that exact plan against physical and operational constraints.
-
-The evaluation can return results such as:
-
-- `success`
-- `unmet_critical_load`
-- `safety_failure`
-- `insufficient_information`
-
-## Routing Logic
-
-The planner follows a resilience-first routing policy:
-
-1. Use renewable energy directly first.
-2. If demand remains, use grid import next when available.
-3. Then use battery discharge.
-4. Use backup generation last.
-
-When there is surplus energy:
-
-1. Keep backup generation off.
-2. Charge the battery toward the 80% operating target when possible.
-3. Export any remaining surplus to the grid when the grid is available.
-
-## What the App Shows
-
-For each scenario, the interface presents:
-
-- status,
-- supervisor alert when required,
-- proposed energy routing,
-- planner rationale,
-- safety and constraints review,
-- operational notes,
-- estimated endurance.
-
-The routing display is direction-aware and can show flows such as:
-
-- Solar → Port
-- Solar → Battery
-- Grid → Port
-- Grid → Battery
-- Port → Grid
-- Battery → Port
-- Generator → Port
-
-## Custom Scenario Inputs
-
-The custom scenario form allows operators to define:
-
-- critical load,
-- vessel demand,
-- other load,
-- solar capacity,
-- battery capacity,
-- battery level as a percentage,
-- grid availability,
-- maximum grid import,
-- backup generator capacity,
-- optional scenario notes.
-
-Battery level is entered in percentage terms in the UI, while the backend converts it into stored energy using the configured battery capacity. The default operating target is 80% of battery capacity.
+```text
+app/
+  agents.py
+  evaluator.py
+  main.py
+  models.py
+  policies.py
+  adk/
+  tools/
+data/
+evals/
+guardrails/
+templates/
+static/
+tests/
+```
 
 ## Run Locally
 
@@ -103,7 +100,7 @@ Run the app:
 uv run uvicorn app.main:app --reload
 ```
 
-Open:
+Open the app:
 
 ```text
 http://127.0.0.1:8000
@@ -115,28 +112,31 @@ http://127.0.0.1:8000
 uv run pytest
 ```
 
-## Project Structure
+## Run Evaluation Cases
 
-A simplified project structure:
-
-```text
-app/
-  evaluator.py
-  main.py
-  models.py
-  policies.py
-static/
-  style.css
-templates/
-  index.html
-tests/
-  ...
+```bash
+uv run pytest
 ```
 
-## Notes
+You can also inspect the scenario evaluation inputs in:
 
-This is a practical MVP focused on structured agent behavior and explainable operational decision support. The current version uses simplified assumptions for endurance, battery charging, and backup generation behavior, so it should be understood as a prototype rather than a production control system.
+```text
+evals/eval_cases.yaml
+```
 
-## Author
+## Demo Scenarios
 
-Designed and developed by Mohammad Hadi Hamednia.
+- Grid disruption with critical-load prioritization.
+- Custom scenario with limited battery and import constraints.
+- Safety-failure scenario where the proposed plan is rejected.
+- Low-endurance scenario requiring supervisor escalation.
+
+## Why this project matters
+
+This project shows how agents can support business operations with structured reasoning, safety checks, and auditable recommendations instead of open-ended chat alone.
+
+## Capstone Links
+
+- **GitHub Repository:** add your repository URL here
+- **Demo Video:** add your YouTube link here
+- **Kaggle Capstone Writeup:** add your Kaggle submission link here

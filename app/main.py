@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import AliasChoices, BaseModel, Field, model_validator
 
+from app.adk.runner import run_adk_workflow
 from app.agents import run_agent_workflow
 from app.models import EvaluationResult, Scenario
 
@@ -89,6 +90,28 @@ def load_scenarios() -> Dict[str, Scenario]:
         raise RuntimeError(f"Failed to load sample scenarios: {e}")
 
 
+def build_custom_scenario(payload: CustomScenarioRequest) -> Scenario:
+    return Scenario(
+        scenario_id="custom",
+        name="Custom Scenario",
+        description=payload.description or "User-defined disruption scenario.",
+        demand={
+            "critical_load_kw": payload.critical_load_kw,
+            "vessel_load_kw": payload.vessel_load_kw,
+            "other_load_kw": payload.other_load_kw,
+        },
+        supply={
+            "solar_kw": payload.solar_kw,
+            "battery_charge_kwh": payload.battery_charge_kwh,
+            "battery_max_kwh": payload.battery_max_kwh,
+            "grid_available": payload.grid_available,
+            "max_grid_import_kw": payload.max_grid_import_kw,
+            "backup_generator_capacity_kw": payload.backup_generator_capacity_kw,
+            "backup_running_percentage": payload.backup_running_percentage,
+        },
+    )
+
+
 scenarios_db = load_scenarios()
 
 
@@ -140,27 +163,32 @@ def evaluate_scenario_endpoint(scenario_id: str):
 @app.post("/api/evaluate-custom", response_model=EvaluationResult)
 def evaluate_custom_scenario(payload: CustomScenarioRequest):
     try:
-        scenario = Scenario(
-            scenario_id="custom",
-            name="Custom Scenario",
-            description=payload.description or "User-defined disruption scenario.",
-            demand={
-                "critical_load_kw": payload.critical_load_kw,
-                "vessel_load_kw": payload.vessel_load_kw,
-                "other_load_kw": payload.other_load_kw,
-            },
-            supply={
-                "solar_kw": payload.solar_kw,
-                "battery_charge_kwh": payload.battery_charge_kwh,
-                "battery_max_kwh": payload.battery_max_kwh,
-                "grid_available": payload.grid_available,
-                "max_grid_import_kw": payload.max_grid_import_kw,
-                "backup_generator_capacity_kw": payload.backup_generator_capacity_kw,
-                "backup_running_percentage": payload.backup_running_percentage,
-            },
-        )
+        scenario = build_custom_scenario(payload)
         return run_agent_workflow(scenario)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
+
+
+@app.post("/api/agents/evaluate/{scenario_id}")
+def evaluate_scenario_with_agents(scenario_id: str):
+    scenario = scenarios_db.get(scenario_id)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    try:
+        return run_adk_workflow(scenario)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent workflow execution failed: {str(e)}")
+
+
+@app.post("/api/agents/evaluate-custom")
+def evaluate_custom_scenario_with_agents(payload: CustomScenarioRequest):
+    try:
+        scenario = build_custom_scenario(payload)
+        return run_adk_workflow(scenario)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent workflow execution failed: {str(e)}")
